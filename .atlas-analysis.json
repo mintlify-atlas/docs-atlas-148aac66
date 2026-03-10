@@ -1,0 +1,132 @@
+{
+  "projectType": "general",
+  "projectName": "Playwright Python and Pytest for Web Automation Testing",
+  "projectDescription": "Comprehensive course materials and examples for web automation testing using Playwright Python and Pytest framework",
+  "theme": "aspen",
+  "primaryColor": "#2D8A39",
+  "lightColor": "#45A655",
+  "darkColor": "#1E5F28",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Getting Started",
+        "groups": [
+          {
+            "group": "Introduction",
+            "pages": ["introduction", "installation"]
+          },
+          {
+            "group": "Quick Start",
+            "pages": ["quickstart", "first-test"]
+          }
+        ]
+      },
+      {
+        "tab": "Core Concepts",
+        "groups": [
+          {
+            "group": "Fundamentals",
+            "pages": [
+              "concepts/locators",
+              "concepts/events",
+              "concepts/authentication"
+            ]
+          },
+          {
+            "group": "Pytest Integration",
+            "pages": [
+              "concepts/pytest-basics",
+              "concepts/pytest-playwright-plugin",
+              "concepts/fixtures"
+            ]
+          },
+          {
+            "group": "Assertions",
+            "pages": [
+              "concepts/web-first-assertions"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Testing Patterns",
+            "pages": [
+              "guides/page-object-model",
+              "guides/data-driven-testing",
+              "guides/bdd"
+            ]
+          },
+          {
+            "group": "Advanced Features",
+            "pages": [
+              "guides/video-recording",
+              "guides/trace-viewer",
+              "guides/api-testing"
+            ]
+          },
+          {
+            "group": "Best Practices",
+            "pages": [
+              "guides/optimization",
+              "guides/tips-and-tricks"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Examples",
+        "groups": [
+          {
+            "group": "Practice Projects",
+            "pages": [
+              "examples/ui-testing-playground",
+              "examples/mail-checker",
+              "examples/github-api"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "CI/CD",
+        "groups": [
+          {
+            "group": "Continuous Integration",
+            "pages": [
+              "ci/github-actions",
+              "ci/best-practices"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Comprehensive Playwright Python examples from basic to advanced",
+    "Pytest integration with pytest-playwright plugin",
+    "Page Object Model implementation patterns",
+    "Web-first assertions and auto-waiting",
+    "Video recording and trace viewer debugging",
+    "API testing with Playwright",
+    "Data-driven and behavior-driven testing",
+    "CI/CD integration with GitHub Actions",
+    "Real-world practice projects and examples"
+  ],
+  "publicApiSurface": [
+    "sync_playwright() - Synchronous Playwright context manager",
+    "async_playwright() - Asynchronous Playwright context manager",
+    "page.goto() - Navigate to URL",
+    "page.get_by_role() - Locate elements by ARIA role",
+    "page.get_by_placeholder() - Locate inputs by placeholder",
+    "page.locator() - Create element locator",
+    "expect(page).to_have_url() - Assert page URL",
+    "expect(page).to_have_title() - Assert page title",
+    "expect(locator).to_be_visible() - Assert element visibility",
+    "context.tracing.start() - Start trace recording",
+    "context.new_page() - Create new page in context",
+    "browser.new_context() - Create new browser context",
+    "playwright.chromium.launch() - Launch Chromium browser"
+  ]
+}
