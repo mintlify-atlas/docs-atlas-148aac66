@@ -1,0 +1,357 @@
+---
+title: Data-Driven Testing
+description: Learn how to use pytest's parametrize decorator to run the same test with different data sets in Playwright Python
+---
+
+## What is Data-Driven Testing?
+
+Data-driven testing is a testing approach where test logic remains constant while test data varies. Instead of writing separate tests for different input values, you define test data sets and run the same test logic against each set.
+
+<Note>
+Data-driven testing significantly reduces code duplication and makes it easy to add new test cases by simply adding data.
+</Note>
+
+## Why Use Data-Driven Testing?
+
+<CardGroup cols={2}>
+  <Card title="Reduced Code Duplication" icon="clone">
+    Write test logic once, run it with multiple data sets
+  </Card>
+  <Card title="Easy Test Coverage" icon="check-double">
+    Add new test cases by adding data, not code
+  </Card>
+  <Card title="Better Maintainability" icon="screwdriver-wrench">
+    Update test logic in one place for all data sets
+  </Card>
+  <Card title="Clear Test Reports" icon="chart-line">
+    Each data set appears as a separate test result
+  </Card>
+</CardGroup>
+
+## Basic Example with Pytest Parametrize
+
+The `@pytest.mark.parametrize` decorator is the primary tool for data-driven testing in pytest.
+
+<Steps>
+  <Step title="Import Pytest">
+    ```python
+    import pytest
+    from root import root
+    ```
+  </Step>
+
+  <Step title="Define Test Data">
+    Use the `@pytest.mark.parametrize` decorator with parameter names and data tuples.
+
+    ```python
+    @pytest.mark.parametrize(
+        ("num", "num_root"),
+        (
+            (100, 10),
+            (36, 6),
+            (25, 5),
+            (16, 4),
+            (9, 3),
+            (4, 2),
+        )
+    )
+    def test_root(num, num_root):
+        assert root(num) == num_root
+    ```
+
+    This single test function will run 6 times, once for each data tuple.
+  </Step>
+</Steps>
+
+<Tip>
+Each parameter combination appears as a separate test in the test report with the values shown in brackets: `test_root[100-10]`, `test_root[36-6]`, etc.
+</Tip>
+
+## Playwright Testing with Parametrize
+
+Here's how to apply data-driven testing to Playwright web tests:
+
+### Testing Multiple Login Scenarios
+
+```python
+import pytest
+from playwright.sync_api import Page, expect
+
+@pytest.mark.parametrize(
+    ("username", "password", "expected_message"),
+    (
+        ("dan", "pwd", "Welcome, dan!"),
+        ("john", "pwd", "Welcome, john!"),
+        ("alice", "pwd", "Welcome, alice!"),
+    )
+)
+def test_successful_login(page: Page, username, password, expected_message):
+    page.goto("http://uitestingplayground.com/sampleapp")
+    
+    page.get_by_placeholder("User Name").fill(username)
+    page.get_by_placeholder("********").fill(password)
+    page.get_by_role("button", name="Log In").click()
+    
+    expect(page.locator("label#loginstatus")).to_have_text(expected_message)
+```
+
+### Testing Invalid Inputs
+
+```python
+@pytest.mark.parametrize(
+    ("username", "password"),
+    (
+        ("", "pwd"),           # Empty username
+        ("dan", ""),           # Empty password
+        ("dan", "wrong"),      # Wrong password
+        ("invalid", "pwd"),    # Invalid username
+    )
+)
+def test_failed_login(page: Page, username, password):
+    page.goto("http://uitestingplayground.com/sampleapp")
+    
+    page.get_by_placeholder("User Name").fill(username)
+    page.get_by_placeholder("********").fill(password)
+    page.get_by_role("button", name="Log In").click()
+    
+    expect(page.locator("label#loginstatus")).to_have_text(
+        "Invalid username/password"
+    )
+```
+
+## Advanced Parametrization
+
+### Using pytest.param for Test IDs
+
+Make test reports more readable with custom test IDs:
+
+```python
+import pytest
+from playwright.sync_api import Page, expect
+
+@pytest.mark.parametrize(
+    ("search_query", "expected_results"),
+    (
+        pytest.param("Python", 10, id="python-search"),
+        pytest.param("JavaScript", 10, id="javascript-search"),
+        pytest.param("TypeScript", 8, id="typescript-search"),
+    )
+)
+def test_search_results_count(page: Page, search_query, expected_results):
+    page.goto("https://example.com/search")
+    page.get_by_placeholder("Search").fill(search_query)
+    page.keyboard.press("Enter")
+    
+    results = page.locator(".search-result").count()
+    assert results >= expected_results
+```
+
+### Multiple Parametrize Decorators
+
+Stack decorators to test all combinations:
+
+```python
+@pytest.mark.parametrize("browser", ["chromium", "firefox", "webkit"])
+@pytest.mark.parametrize("viewport", [(1920, 1080), (1366, 768), (375, 667)])
+def test_responsive_layout(browser, viewport):
+    # This test runs 9 times (3 browsers × 3 viewports)
+    pass
+```
+
+### Parametrize with Fixtures
+
+Combine parametrization with fixtures for complex test setups:
+
+```python
+import pytest
+from playwright.sync_api import Page
+
+@pytest.fixture
+@pytest.mark.parametrize("base_url", [
+    "https://staging.example.com",
+    "https://production.example.com"
+])
+def setup_page(page: Page, base_url):
+    page.goto(base_url)
+    return page
+
+def test_homepage_title(setup_page):
+    assert setup_page.title() == "Example Domain"
+```
+
+## Loading Test Data from External Sources
+
+### From JSON Files
+
+```python
+import pytest
+import json
+from pathlib import Path
+
+def load_test_data():
+    data_file = Path(__file__).parent / "test_data.json"
+    with open(data_file) as f:
+        return json.load(f)
+
+@pytest.mark.parametrize(
+    "test_case",
+    load_test_data(),
+    ids=lambda tc: tc["id"]
+)
+def test_with_json_data(page: Page, test_case):
+    page.goto(test_case["url"])
+    expect(page.locator(test_case["selector"])).to_have_text(
+        test_case["expected_text"]
+    )
+```
+
+### From CSV Files
+
+```python
+import pytest
+import csv
+from pathlib import Path
+
+def load_csv_data():
+    data_file = Path(__file__).parent / "users.csv"
+    with open(data_file) as f:
+        reader = csv.DictReader(f)
+        return [row for row in reader]
+
+@pytest.mark.parametrize(
+    "user_data",
+    load_csv_data(),
+    ids=lambda u: u["username"]
+)
+def test_user_login(page: Page, user_data):
+    page.goto("https://example.com/login")
+    page.get_by_label("Username").fill(user_data["username"])
+    page.get_by_label("Password").fill(user_data["password"])
+    page.get_by_role("button", name="Login").click()
+    
+    expect(page.locator(".welcome-message")).to_be_visible()
+```
+
+## Marking Specific Test Cases
+
+You can mark individual parameter sets with pytest marks:
+
+```python
+import pytest
+from playwright.sync_api import Page
+
+@pytest.mark.parametrize(
+    ("url", "status_code"),
+    (
+        pytest.param(
+            "https://example.com", 200,
+            id="homepage"
+        ),
+        pytest.param(
+            "https://example.com/slow-page", 200,
+            marks=pytest.mark.slow,
+            id="slow-page"
+        ),
+        pytest.param(
+            "https://example.com/broken", 404,
+            marks=pytest.mark.xfail,
+            id="known-broken"
+        ),
+    )
+)
+def test_page_status(page: Page, url, status_code):
+    response = page.goto(url)
+    assert response.status == status_code
+```
+
+Run only fast tests:
+```bash
+pytest -m "not slow"
+```
+
+## Running Parametrized Tests
+
+### Run all tests
+```bash
+pytest test_root.py
+```
+
+### Run a specific parameter set
+```bash
+pytest test_root.py::test_root[100-10]
+```
+
+### Run tests matching a pattern
+```bash
+pytest test_root.py -k "25 or 36"
+```
+
+### See all test IDs
+```bash
+pytest --collect-only test_root.py
+```
+
+## Best Practices
+
+<Warning>
+**Avoid These Mistakes:**
+- Don't make test data too complex or hard to understand
+- Don't mix test logic with data generation
+- Don't parametrize tests that have nothing in common
+</Warning>
+
+<Tip>
+**Do This Instead:**
+- Keep test data simple and readable
+- Use descriptive parameter names
+- Add custom test IDs for clarity
+- Group related test cases together
+- Consider external files for large data sets
+</Tip>
+
+### Good Example
+
+```python
+@pytest.mark.parametrize(
+    ("num", "expected_root"),
+    (
+        (100, 10),
+        (36, 6),
+        (25, 5),
+    ),
+    ids=["hundred", "thirty-six", "twenty-five"]
+)
+def test_square_root(num, expected_root):
+    assert root(num) == expected_root
+```
+
+### Bad Example
+
+```python
+@pytest.mark.parametrize(
+    "data",
+    (
+        {"input": 100, "output": 10, "description": "test hundred"},
+        {"input": 36, "output": 6, "description": "test thirty-six"},
+    )
+)
+def test_square_root(data):  # Too complex, hard to read
+    assert root(data["input"]) == data["output"]
+```
+
+## When to Use Data-Driven Testing
+
+<CardGroup cols={2}>
+  <Card title="✅ Use When" icon="check">
+    - Testing multiple similar scenarios
+    - Validating boundary conditions
+    - Testing with various input combinations
+    - Running the same test across environments
+  </Card>
+  <Card title="❌ Avoid When" icon="xmark">
+    - Test logic differs significantly between cases
+    - You need complex setup for each case
+    - Data is too complex to parametrize cleanly
+    - Single test case is sufficient
+  </Card>
+</CardGroup>

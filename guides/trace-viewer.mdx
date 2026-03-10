@@ -1,0 +1,522 @@
+---
+title: Trace Viewer
+description: Learn how to use Playwright's Trace Viewer to debug tests with detailed execution traces, screenshots, and network activity
+---
+
+## What is Trace Viewer?
+
+Playwright's Trace Viewer is a powerful debugging tool that records detailed information about your test execution, including:
+
+- **Screenshots** at every action
+- **DOM snapshots** at each step
+- **Network requests** and responses
+- **Console logs** and errors
+- **Test source code** and stack traces
+- **Timing information** for each action
+
+<Note>
+Trace Viewer provides a complete timeline of your test execution, making it significantly easier to debug failures than video recordings alone.
+</Note>
+
+## Why Use Trace Viewer?
+
+<CardGroup cols={2}>
+  <Card title="Time-Travel Debugging" icon="clock-rotate-left">
+    Step through test execution and see the exact state at each point
+  </Card>
+  <Card title="Network Inspection" icon="network-wired">
+    View all network requests, responses, and timings
+  </Card>
+  <Card title="DOM Snapshots" icon="camera">
+    Inspect the exact DOM state at each action
+  </Card>
+  <Card title="Source Code Context" icon="code">
+    See which line of code caused each action
+  </Card>
+</CardGroup>
+
+## Basic Trace Recording
+
+<Steps>
+  <Step title="Enable Tracing with a Fixture">
+    Create a pytest fixture that starts and stops tracing:
+
+    ```python
+    import pytest
+    from playwright.sync_api import BrowserContext, Page
+
+    DOCS_URL = "https://playwright.dev/python/docs/intro"
+
+    @pytest.fixture(autouse=True)
+    def trace_test(context: BrowserContext):
+        # Start tracing before test
+        context.tracing.start(
+            name="playwright",
+            screenshots=True,
+            snapshots=True,
+            sources=True,
+        )
+        # Pause until test function finishes
+        yield
+        # Stop tracing and save it
+        context.tracing.stop(path="trace.zip")
+
+    def test_page_has_get_started_link(page: Page):
+        page.goto("https://playwright.dev/python")
+
+        link = page.get_by_role("link", name="GET STARTED")
+        link.click()
+        
+        assert page.url == DOCS_URL
+    ```
+
+    <Tip>
+    The `autouse=True` parameter ensures tracing is automatically enabled for all tests using the `context` fixture.
+    </Tip>
+  </Step>
+
+  <Step title="Run Your Test">
+    ```bash
+    pytest test_trace.py
+    ```
+
+    After the test runs, a `trace.zip` file will be created in your project directory.
+  </Step>
+
+  <Step title="View the Trace">
+    Open the trace in Playwright's Trace Viewer:
+
+    ```bash
+    playwright show-trace trace.zip
+    ```
+
+    This opens an interactive web interface in your browser.
+  </Step>
+</Steps>
+
+## Trace Recording Options
+
+### Full Trace Options
+
+```python
+context.tracing.start(
+    name="my-test-trace",        # Name for the trace
+    screenshots=True,             # Capture screenshots
+    snapshots=True,               # Capture DOM snapshots
+    sources=True,                 # Include source code
+    title="Login Test Trace"     # Human-readable title
+)
+```
+
+### Minimal Trace (Faster)
+
+```python
+context.tracing.start(
+    screenshots=False,  # Disable screenshots for speed
+    snapshots=False,    # Disable snapshots for speed
+    sources=True        # Keep source code only
+)
+```
+
+<Warning>
+Disabling snapshots and screenshots significantly reduces trace file size but limits debugging capabilities.
+</Warning>
+
+## Tracing Only on Failure
+
+Save disk space by recording traces only when tests fail:
+
+```python
+import pytest
+from playwright.sync_api import BrowserContext
+
+@pytest.fixture
+def trace_on_failure(context: BrowserContext, request):
+    """Record trace only if test fails."""
+    context.tracing.start(
+        screenshots=True,
+        snapshots=True,
+        sources=True
+    )
+    
+    yield
+    
+    # Save trace only if test failed
+    if request.node.rep_call.failed:
+        trace_path = f"traces/failed_{request.node.name}.zip"
+        context.tracing.stop(path=trace_path)
+    else:
+        context.tracing.stop()
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Store test result for fixture access."""
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, f"rep_{rep.when}", rep)
+
+def test_example(page: Page, trace_on_failure):
+    page.goto("https://example.com")
+    assert page.title() == "Example Domain"
+```
+
+## Advanced Tracing Patterns
+
+### Multiple Trace Chunks
+
+Record traces in chunks for long-running tests:
+
+```python
+def test_multi_step_process(context: BrowserContext, page: Page):
+    # Start tracing for first step
+    context.tracing.start(screenshots=True, snapshots=True, sources=True)
+    
+    page.goto("https://example.com/login")
+    page.fill("#username", "user")
+    page.fill("#password", "pass")
+    page.click("#submit")
+    
+    # Stop and save first chunk
+    context.tracing.stop(path="traces/step1_login.zip")
+    
+    # Start tracing for second step
+    context.tracing.start(screenshots=True, snapshots=True, sources=True)
+    
+    page.goto("https://example.com/checkout")
+    page.click("#buy")
+    
+    # Stop and save second chunk
+    context.tracing.stop(path="traces/step2_checkout.zip")
+```
+
+### Organized Trace Files
+
+```python
+import pytest
+from playwright.sync_api import BrowserContext
+from pathlib import Path
+from datetime import datetime
+
+@pytest.fixture(autouse=True)
+def organized_trace(context: BrowserContext, request):
+    """Create organized trace files by test suite."""
+    # Get test information
+    test_name = request.node.name
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Create trace directory structure
+    trace_dir = Path("traces") / request.module.__name__
+    trace_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Start tracing
+    context.tracing.start(
+        name=test_name,
+        screenshots=True,
+        snapshots=True,
+        sources=True,
+        title=f"{test_name} - {timestamp}"
+    )
+    
+    yield
+    
+    # Save trace with meaningful name
+    trace_path = trace_dir / f"{test_name}_{timestamp}.zip"
+    context.tracing.stop(path=str(trace_path))
+```
+
+## Using pytest-playwright Configuration
+
+Configure tracing in `pytest.ini`:
+
+```ini
+[pytest]
+addopts = 
+    --tracing on
+    --tracing-dir traces/
+    --screenshot on
+```
+
+Tracing modes:
+- `on`: Always record traces
+- `off`: Never record traces (default)
+- `retain-on-failure`: Record all tests but keep only failed ones
+
+## Understanding the Trace Viewer UI
+
+### Timeline View
+
+The timeline shows:
+- **Actions**: Each interaction (click, fill, navigate)
+- **Duration**: How long each action took
+- **Status**: Success or failure indicators
+- **Screenshots**: Visual state at each step
+
+### Action Details
+
+Click any action to see:
+- **Before/After Screenshots**: Visual diff
+- **Selector**: The locator used
+- **Call Log**: Method and parameters
+- **Source Code**: The line that triggered the action
+
+### Network Tab
+
+Inspect all network activity:
+- Request URL and method
+- Status codes and response times
+- Request/response headers
+- Response body (JSON, HTML, etc.)
+
+### Console Tab
+
+View browser console output:
+- `console.log` messages
+- Errors and warnings
+- Stack traces
+
+### Source Tab
+
+See your test source code with:
+- Syntax highlighting
+- Current action highlighted
+- Stack trace for errors
+
+## Trace Recording Strategies
+
+### Strategy 1: Trace Everything (Development)
+
+```python
+# conftest.py
+import pytest
+from playwright.sync_api import BrowserContext
+
+@pytest.fixture(autouse=True, scope="function")
+def trace_all(context: BrowserContext, request):
+    context.tracing.start(
+        screenshots=True,
+        snapshots=True,
+        sources=True
+    )
+    yield
+    context.tracing.stop(
+        path=f"traces/{request.node.name}.zip"
+    )
+```
+
+### Strategy 2: Trace on Failure (CI/CD)
+
+```python
+# conftest.py
+import pytest
+from playwright.sync_api import BrowserContext
+import os
+
+@pytest.fixture(autouse=True)
+def trace_on_failure(context: BrowserContext, request):
+    if os.getenv("CI"):  # Only in CI
+        context.tracing.start(
+            screenshots=True,
+            snapshots=True,
+            sources=True
+        )
+        yield
+        if request.node.rep_call.failed:
+            context.tracing.stop(
+                path=f"traces/failed_{request.node.name}.zip"
+            )
+        else:
+            context.tracing.stop()
+    else:
+        yield
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, f"rep_{rep.when}", rep)
+```
+
+### Strategy 3: Selective Tracing
+
+```python
+import pytest
+from playwright.sync_api import BrowserContext
+
+@pytest.fixture
+def with_trace(context: BrowserContext, request):
+    """Use this fixture only when you need tracing."""
+    context.tracing.start(
+        screenshots=True,
+        snapshots=True,
+        sources=True
+    )
+    yield
+    context.tracing.stop(
+        path=f"traces/{request.node.name}.zip"
+    )
+
+def test_without_trace(page: Page):
+    """This test won't record a trace."""
+    page.goto("https://example.com")
+
+def test_with_trace(page: Page, with_trace):
+    """This test records a trace."""
+    page.goto("https://example.com")
+```
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml
+name: Playwright Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install playwright pytest-playwright
+        playwright install chromium
+    
+    - name: Run tests with tracing
+      run: pytest --tracing retain-on-failure
+    
+    - name: Upload traces
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: playwright-traces
+        path: traces/
+        retention-days: 7
+```
+
+### View Traces from CI
+
+1. Download the trace artifact from GitHub Actions
+2. Unzip the file
+3. Run `playwright show-trace trace.zip`
+
+Or use the online viewer:
+```bash
+# Upload trace to Playwright's trace viewer
+open https://trace.playwright.dev
+# Drag and drop the trace.zip file
+```
+
+## Best Practices
+
+<Warning>
+**Watch Out For:**
+- Traces can be very large (10-100MB per test)
+- Trace recording adds overhead (~10-20% slower)
+- Don't commit trace files to version control
+- Clean up old traces regularly
+</Warning>
+
+<Tip>
+**Best Practices:**
+- Use `retain-on-failure` mode in CI/CD
+- Enable all features (screenshots, snapshots, sources) for debugging
+- Organize traces by test suite and date
+- Set up automatic cleanup of traces older than 7 days
+- Use `.gitignore` to exclude trace directories
+- Share trace files with team members for collaborative debugging
+</Tip>
+
+## Trace Viewer vs Video Recording
+
+| Feature | Trace Viewer | Video Recording |
+|---------|--------------|----------------|
+| **File Size** | Large (50-100MB) | Medium (5-20MB) |
+| **Debugging Power** | Excellent | Good |
+| **DOM Inspection** | ✅ Yes | ❌ No |
+| **Network Inspection** | ✅ Yes | ❌ No |
+| **Time Travel** | ✅ Yes | ❌ No |
+| **Visual Replay** | ✅ Yes | ✅ Yes |
+| **Performance Impact** | Higher | Lower |
+
+<Note>
+For debugging, always prefer Trace Viewer. For visual documentation or quick reviews, video recording is sufficient.
+</Note>
+
+## Troubleshooting
+
+### Trace Files Not Generated
+
+<Steps>
+  <Step title="Ensure tracing.stop() is called">
+    ```python
+    context.tracing.start(screenshots=True, snapshots=True, sources=True)
+    # ... test code ...
+    context.tracing.stop(path="trace.zip")  # Required!
+    ```
+  </Step>
+
+  <Step title="Check directory permissions">
+    ```bash
+    mkdir -p traces
+    chmod 755 traces
+    ```
+  </Step>
+
+  <Step title="Verify path is valid">
+    ```python
+    from pathlib import Path
+    trace_path = Path("traces") / "test.zip"
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    context.tracing.stop(path=str(trace_path))
+    ```
+  </Step>
+</Steps>
+
+### Large Trace Files
+
+Reduce trace size:
+
+```python
+context.tracing.start(
+    screenshots=False,  # Disable screenshots
+    snapshots=True,     # Keep snapshots
+    sources=True        # Keep sources
+)
+```
+
+### Can't Open Trace Viewer
+
+Alternative viewing methods:
+
+```bash
+# Use online viewer
+open https://trace.playwright.dev
+# Then drag and drop trace.zip
+
+# Or use npx (no installation needed)
+npx playwright show-trace trace.zip
+```
+
+## When to Use Trace Viewer
+
+<CardGroup cols={2}>
+  <Card title="✅ Use Trace Viewer" icon="check">
+    - Debugging test failures
+    - Understanding complex interactions
+    - Investigating timing issues
+    - Analyzing network problems
+    - CI/CD failure investigation
+  </Card>
+  <Card title="❌ Use Video Instead" icon="video">
+    - Creating documentation
+    - Quick visual review
+    - Demonstrating bugs to stakeholders
+    - When disk space is limited
+  </Card>
+</CardGroup>

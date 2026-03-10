@@ -1,0 +1,666 @@
+---
+title: 'CI/CD Best Practices'
+description: 'Best practices for running Playwright Python tests in continuous integration environments'
+icon: 'list-check'
+---
+
+## Overview
+
+Running Playwright tests in CI/CD environments requires special considerations for performance, reliability, and maintainability. This guide covers essential best practices for production-ready test automation.
+
+## Browser Configuration
+
+### Always Run Headless in CI
+
+In CI environments, always run browsers in headless mode for better performance and resource utilization:
+
+```python pytest.ini
+[pytest]
+addopts = --browser chromium --headed=false
+```
+
+<Tip>
+  Running headless saves memory and CPU resources, allowing more parallel test execution.
+</Tip>
+
+### Install Only Required Browsers
+
+Install only the browsers you need to reduce installation time and disk usage:
+
+```bash
+# Install single browser
+python -m playwright install chromium --with-deps
+
+# Install multiple specific browsers
+python -m playwright install chromium firefox --with-deps
+```
+
+<Warning>
+  Always use `--with-deps` on Linux CI systems to install required system dependencies.
+</Warning>
+
+### Configure Browser Launch Arguments
+
+Optimize browser settings for CI environments using fixtures:
+
+```python conftest.py
+import pytest
+from playwright.sync_api import Page, expect
+
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    return {
+        **browser_type_launch_args,
+        "headless": True,
+        "args": [
+            "--disable-dev-shm-usage",
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+        ]
+    }
+```
+
+<Note>
+  The `--disable-dev-shm-usage` flag prevents shared memory issues in Docker containers with limited `/dev/shm` space.
+</Note>
+
+## Test Optimization
+
+### Skip Unnecessary Resources
+
+Improve test speed by blocking non-essential resources:
+
+```python conftest.py
+import pytest
+from playwright.sync_api import Page, Route
+
+
+NOT_ALLOWED_RESOURCES = (
+    "image", "font", "stylesheet", "media"
+)
+
+
+def on_route(route: Route):
+    if route.request.resource_type in NOT_ALLOWED_RESOURCES:
+        route.abort()
+    else:
+        route.continue_()
+
+
+@pytest.fixture(autouse=True)
+def skip_resources(page: Page):
+    page.route("**", on_route)
+```
+
+This fixture automatically applies to all tests and can reduce test execution time by 30-50% for resource-heavy pages.
+
+<Tip>
+  Only block resources that aren't critical for your test scenarios. Always test that your application functions correctly with blocked resources.
+</Tip>
+
+### Use Parallel Execution
+
+Run tests in parallel using pytest-xdist:
+
+```bash
+# Install pytest-xdist
+pip install pytest-xdist
+
+# Run tests in parallel
+pytest -n auto
+
+# Specify number of workers
+pytest -n 4
+```
+
+<Note>
+  `pytest-xdist` works seamlessly with `pytest-playwright`, creating isolated browser contexts for each worker.
+</Note>
+
+### Reuse Authentication State
+
+Save and reuse authentication state across tests:
+
+```python conftest.py
+import pytest
+
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    return {
+        **browser_context_args,
+        "storage_state": "playwright/.auth/storage_state.json",
+    }
+```
+
+```python auth_setup.py
+from playwright.sync_api import sync_playwright
+
+
+def save_auth_state():
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        context = browser.new_context()
+        page = context.new_page()
+        
+        # Perform login
+        page.goto("https://example.com/login")
+        page.fill("input[name='username']", "user@example.com")
+        page.fill("input[name='password']", "password123")
+        page.click("button[type='submit']")
+        
+        # Save authenticated state
+        context.storage_state(path="playwright/.auth/storage_state.json")
+        browser.close()
+
+
+if __name__ == "__main__":
+    save_auth_state()
+```
+
+Run authentication setup before tests:
+
+```bash
+python auth_setup.py
+pytest
+```
+
+## Error Handling and Debugging
+
+### Capture Screenshots on Failure
+
+Automatically capture screenshots when tests fail:
+
+```bash
+pytest --screenshot=only-on-failure
+```
+
+Or configure in pytest.ini:
+
+```ini pytest.ini
+[pytest]
+addopts = --screenshot=only-on-failure --output=test-results/
+```
+
+### Record Videos on Failure
+
+Capture video recordings for failed tests:
+
+```bash
+pytest --video=retain-on-failure
+```
+
+<Warning>
+  Video recording increases resource usage and test execution time. Only enable for debugging or critical test suites.
+</Warning>
+
+### Use Proper Assertions
+
+Use Playwright's web-first assertions for automatic retrying:
+
+```python test_example.py
+from playwright.sync_api import Page, expect
+
+
+def test_cube(page: Page):
+    page.goto("http://127.0.0.1:8000/")
+
+    input = page.get_by_placeholder("enter number...")
+    input.fill("5")
+
+    page.get_by_role(
+        "button", name="Cube"
+    ).click()
+
+    result = page.locator("css=p#result")
+
+    # Web-first assertion with auto-retry
+    expect(result).to_contain_text("125")
+
+
+def test_empty_input(page: Page):
+    page.goto("http://127.0.0.1:8000/")
+
+    input = page.get_by_placeholder("enter number...")
+    input.fill("")
+
+    page.get_by_role(
+        "button", name="Cube"
+    ).click()
+
+    result = page.locator("css=p#result")
+
+    # Exact text match
+    expect(result).to_have_text(
+        "Enter something!"
+    )
+```
+
+<Tip>
+  Web-first assertions like `expect(element).to_contain_text()` automatically wait and retry, making tests more resilient to timing issues.
+</Tip>
+
+## Fixtures and Test Organization
+
+### Use Autouse Fixtures for Setup
+
+Create reusable setup/teardown logic with autouse fixtures:
+
+```python conftest.py
+import pytest
+from playwright.sync_api import Page
+
+
+@pytest.fixture(autouse=True, scope="function")
+def visit_homepage(page: Page):
+    # Setup: Navigate to homepage before each test
+    page.goto("https://example.com")
+    
+    # Yield control to the test
+    yield page
+    
+    # Teardown: Clean up after each test
+    page.close()
+    print("\n[ Fixture ]: page closed!")
+```
+
+### Configure Base URL
+
+Set a base URL for consistent test environments:
+
+```python conftest.py
+import pytest
+
+
+BASE_URL = "http://127.0.0.1:8000/"
+
+
+@pytest.fixture(scope="session")
+def base_url():
+    return BASE_URL
+
+
+@pytest.fixture(autouse=True)
+def page_with_base_url(page, base_url):
+    page.goto(base_url)
+    yield page
+```
+
+```python test_app.py
+from playwright.sync_api import Page, expect
+
+
+BASE_URL = "http://127.0.0.1:8000/"
+
+
+def test_cube(page: Page):
+    page.goto(BASE_URL)
+
+    input = page.get_by_placeholder("enter number...")
+    input.fill("5")
+
+    page.get_by_role(
+        "button", name="Cube"
+    ).click()
+
+    result = page.locator("css=p#result")
+
+    expect(result).to_contain_text("125")
+```
+
+<Tip>
+  Use environment variables for different environments:
+  ```python
+  import os
+  BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
+  ```
+</Tip>
+
+## CI-Specific Configurations
+
+### Detect CI Environment
+
+Adjust behavior based on CI environment:
+
+```python conftest.py
+import os
+import pytest
+
+
+def is_ci():
+    return os.getenv("CI") == "true"
+
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    args = {**browser_type_launch_args}
+    
+    if is_ci():
+        # CI-specific settings
+        args["headless"] = True
+        args["args"] = [
+            "--disable-dev-shm-usage",
+            "--no-sandbox",
+        ]
+    else:
+        # Local development settings
+        args["headless"] = False
+        args["slow_mo"] = 500
+    
+    return args
+```
+
+### Timeout Configuration
+
+Increase timeouts in CI environments to handle slower performance:
+
+```python pytest.ini
+[pytest]
+addopts = --browser chromium
+timeout = 60
+```
+
+```python conftest.py
+import pytest
+
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    return {
+        **browser_context_args,
+        "default_timeout": 30000,  # 30 seconds
+    }
+```
+
+### Retry Failed Tests
+
+Automatically retry flaky tests:
+
+```bash
+# Install pytest-rerunfailures
+pip install pytest-rerunfailures
+
+# Retry failed tests up to 2 times
+pytest --reruns 2 --reruns-delay 1
+```
+
+```ini pytest.ini
+[pytest]
+addopts = --reruns 2 --reruns-delay 1
+```
+
+<Warning>
+  While retries can help with flaky tests, focus on fixing the root cause rather than relying on retries long-term.
+</Warning>
+
+## Resource Management
+
+### Clean Up Test Data
+
+Ensure proper cleanup to prevent test pollution:
+
+```python conftest.py
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def cleanup_test_data(page):
+    yield
+    # Cleanup after test
+    page.evaluate("localStorage.clear()")
+    page.evaluate("sessionStorage.clear()")
+```
+
+### Monitor Resource Usage
+
+Track memory and CPU usage to identify resource leaks:
+
+```yaml .github/workflows/test.yml
+- name: Run tests with monitoring
+  run: |
+    pytest -v --durations=10
+```
+
+The `--durations` flag shows the slowest tests, helping identify performance bottlenecks.
+
+### Close Browsers Properly
+
+Always ensure browsers are closed, even when tests fail:
+
+```python test_with_cleanup.py
+import pytest
+from playwright.sync_api import sync_playwright
+
+
+def test_example():
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        try:
+            page = browser.new_page()
+            page.goto("https://example.com")
+            # Test logic here
+        finally:
+            browser.close()
+```
+
+<Note>
+  When using `pytest-playwright`, browser lifecycle is managed automatically. Manual cleanup is only needed for custom browser instances.
+</Note>
+
+## Test Isolation
+
+### Use Fresh Contexts
+
+Ensure each test gets a fresh browser context:
+
+```python conftest.py
+import pytest
+
+
+@pytest.fixture
+def context(browser):
+    context = browser.new_context()
+    yield context
+    context.close()
+
+
+@pytest.fixture
+def page(context):
+    page = context.new_page()
+    yield page
+    page.close()
+```
+
+### Clear State Between Tests
+
+Reset browser state between tests:
+
+```python conftest.py
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def clear_state(page):
+    yield
+    # Clear all state after test
+    page.context.clear_cookies()
+    page.context.clear_permissions()
+```
+
+## Monitoring and Reporting
+
+### Generate Test Reports
+
+Create comprehensive HTML reports:
+
+```bash
+pip install pytest-html
+pytest --html=report.html --self-contained-html
+```
+
+### Add Custom Markers
+
+Organize tests with custom markers:
+
+```python pytest.ini
+[pytest]
+markers =
+    smoke: Quick smoke tests
+    slow: Slow-running tests
+    critical: Critical path tests
+```
+
+```python test_critical.py
+import pytest
+from playwright.sync_api import Page, expect
+
+
+@pytest.mark.smoke
+@pytest.mark.critical
+def test_homepage_loads(page: Page):
+    page.goto("https://example.com")
+    expect(page).to_have_title("Example Domain")
+```
+
+Run specific test categories:
+
+```bash
+# Run only smoke tests
+pytest -m smoke
+
+# Run all except slow tests
+pytest -m "not slow"
+```
+
+### Track Test Metrics
+
+Monitor test suite health over time:
+
+```yaml .github/workflows/test.yml
+- name: Run tests with JUnit report
+  run: pytest --junitxml=test-results.xml
+
+- name: Publish test results
+  uses: EnricoMi/publish-unit-test-result-action@v2
+  if: always()
+  with:
+    files: test-results.xml
+```
+
+## Environment-Specific Best Practices
+
+### Docker Considerations
+
+When running in Docker containers:
+
+<Steps>
+  <Step title="Use appropriate base image">
+    ```dockerfile
+    FROM mcr.microsoft.com/playwright/python:v1.40.0-focal
+    
+    WORKDIR /app
+    COPY requirements.txt .
+    RUN pip install -r requirements.txt
+    
+    COPY . .
+    CMD ["pytest", "-v"]
+    ```
+  </Step>
+
+  <Step title="Set shared memory size">
+    ```bash
+    docker run --shm-size=1gb your-test-image
+    ```
+    
+    Or use the `--disable-dev-shm-usage` flag in browser launch args.
+  </Step>
+
+  <Step title="Configure user permissions">
+    Run as non-root user for security:
+    ```dockerfile
+    USER pwuser
+    ```
+  </Step>
+</Steps>
+
+### GitHub Actions Specific
+
+<CodeGroup>
+
+```yaml Optimize workflow
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - run: pip install -r requirements.txt
+      
+      - uses: actions/cache@v3
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-browsers
+      
+      - run: playwright install chromium --with-deps
+      
+      - run: pytest -v
+```
+
+```yaml Matrix strategy
+strategy:
+  fail-fast: false
+  matrix:
+    python-version: ['3.9', '3.10', '3.11']
+    browser: [chromium, firefox]
+```
+
+</CodeGroup>
+
+## Summary Checklist
+
+<CardGroup cols={2}>
+  <Card title="Performance" icon="gauge-high">
+    - Run headless in CI
+    - Block unnecessary resources
+    - Use parallel execution
+    - Cache dependencies and browsers
+  </Card>
+  
+  <Card title="Reliability" icon="shield-check">
+    - Use web-first assertions
+    - Configure appropriate timeouts
+    - Implement proper retries
+    - Ensure test isolation
+  </Card>
+  
+  <Card title="Debugging" icon="bug">
+    - Capture screenshots on failure
+    - Record videos when needed
+    - Generate test reports
+    - Monitor slow tests
+  </Card>
+  
+  <Card title="Maintenance" icon="wrench">
+    - Reuse authentication state
+    - Organize with fixtures
+    - Use custom markers
+    - Clean up test data
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="GitHub Actions Setup" icon="github" href="/ci/github-actions">
+    Configure Playwright tests in GitHub Actions
+  </Card>
+  <Card title="Fixtures Guide" icon="flask" href="/concepts/fixtures">
+    Learn about Playwright fixtures
+  </Card>
+</CardGroup>

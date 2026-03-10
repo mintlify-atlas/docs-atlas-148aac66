@@ -1,0 +1,488 @@
+---
+title: Video Recording
+description: Learn how to record videos of your test executions in Playwright Python for debugging and documentation purposes
+---
+
+## Overview
+
+Playwright can record videos of your test execution, which is invaluable for debugging test failures, creating documentation, and understanding what happened during test runs.
+
+<Note>
+Video recording captures the entire browser session, making it easy to see exactly what happened during a test, especially in CI/CD environments where you can't watch tests run live.
+</Note>
+
+## Why Record Videos?
+
+<CardGroup cols={2}>
+  <Card title="Debug Failures" icon="bug">
+    See exactly what happened when a test failed
+  </Card>
+  <Card title="CI/CD Visibility" icon="cloud">
+    Review test execution in headless environments
+  </Card>
+  <Card title="Documentation" icon="file-video">
+    Create visual documentation of application workflows
+  </Card>
+  <Card title="Test Evidence" icon="folder-open">
+    Keep records of test execution for compliance
+  </Card>
+</CardGroup>
+
+## Basic Video Recording
+
+<Steps>
+  <Step title="Enable Video Recording">
+    Create a browser context with video recording enabled:
+
+    ```python
+    import pytest
+    from playwright.sync_api import Browser, Page
+
+    DOCS_URL = "https://playwright.dev/python/docs/intro"
+
+    def test_page_has_get_started_link(browser: Browser):
+        context = browser.new_context(
+            record_video_dir="video/"
+        )
+        page = context.new_page()
+
+        page.goto("https://playwright.dev/python")
+
+        theme_btn = page.get_by_title(
+            "Switch between dark and light mode (currently dark mode)"
+        )
+        theme_btn.click()
+
+        link = page.get_by_role("link", name="GET STARTED")
+        link.click()
+        
+        assert page.url == DOCS_URL
+    ```
+
+    <Tip>
+    The video is saved only when you close the context or browser. Make sure to properly close them to ensure videos are saved.
+    </Tip>
+  </Step>
+
+  <Step title="Videos are Saved on Context Close">
+    Videos are automatically saved when the browser context closes:
+
+    ```python
+    def test_with_video(browser: Browser):
+        context = browser.new_context(record_video_dir="video/")
+        page = context.new_page()
+        
+        # Perform test actions
+        page.goto("https://example.com")
+        page.click("button")
+        
+        # Video is saved when context closes
+        context.close()  # Important!
+    ```
+  </Step>
+
+  <Step title="Check the Output">
+    After the test runs, videos will be saved in the specified directory:
+
+    ```
+    video/
+    └── video-1a2b3c4d5e6f.webm
+    ```
+
+    Videos are in WebM format and can be played in any modern browser or video player.
+  </Step>
+</Steps>
+
+## Video Recording Options
+
+### Specify Video Size
+
+```python
+context = browser.new_context(
+    record_video_dir="video/",
+    record_video_size={"width": 1280, "height": 720}
+)
+```
+
+<Warning>
+The video size must not exceed the viewport size. Set viewport size if you want larger videos.
+</Warning>
+
+### Control When Videos Are Saved
+
+By default, videos are saved only when the context closes. You can configure this behavior:
+
+```python
+# Using pytest.ini configuration
+# In pytest.ini:
+[pytest]
+addopts = --video retain-on-failure
+```
+
+Or programmatically:
+
+```python
+import pytest
+from playwright.sync_api import Browser
+
+@pytest.fixture
+def video_context(browser: Browser):
+    context = browser.new_context(
+        record_video_dir="video/"
+    )
+    yield context
+    
+    # Only save video if test failed
+    context.close()
+```
+
+## Using Fixtures for Video Recording
+
+Create a reusable fixture for video recording:
+
+```python
+import pytest
+from playwright.sync_api import Browser, BrowserContext
+from datetime import datetime
+
+@pytest.fixture
+def video_context(browser: Browser, request) -> BrowserContext:
+    """Create a context with video recording enabled."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    test_name = request.node.name
+    
+    context = browser.new_context(
+        record_video_dir="videos/",
+        record_video_size={"width": 1920, "height": 1080}
+    )
+    
+    yield context
+    
+    # Save video with meaningful name
+    video_path = context.pages[0].video.path()
+    context.close()
+    
+    # Optionally rename video
+    if video_path:
+        new_path = f"videos/{test_name}_{timestamp}.webm"
+        import shutil
+        shutil.move(video_path, new_path)
+
+def test_navigation(video_context):
+    page = video_context.new_page()
+    page.goto("https://playwright.dev/python")
+    page.get_by_role("link", name="Docs").click()
+    assert "docs" in page.url
+```
+
+## Recording Only on Failure
+
+Save disk space by recording videos only when tests fail:
+
+```python
+import pytest
+from playwright.sync_api import Browser, BrowserContext
+import os
+
+@pytest.fixture
+def video_on_failure(browser: Browser, request):
+    context = browser.new_context(
+        record_video_dir="videos/temp/"
+    )
+    
+    yield context
+    
+    video = context.pages[0].video
+    context.close()
+    
+    # Only keep video if test failed
+    if request.node.rep_call.failed:
+        video_path = video.path()
+        new_path = f"videos/failures/{request.node.name}.webm"
+        os.makedirs("videos/failures", exist_ok=True)
+        os.rename(video_path, new_path)
+    else:
+        # Delete video for passed tests
+        try:
+            os.remove(video.path())
+        except:
+            pass
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Store test result for fixture access."""
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, f"rep_{rep.when}", rep)
+
+def test_example(video_on_failure):
+    page = video_on_failure.new_page()
+    page.goto("https://example.com")
+    assert page.title() == "Example Domain"
+```
+
+## Video Recording with pytest-playwright
+
+When using the pytest-playwright plugin, configure video recording in `pytest.ini`:
+
+```ini
+[pytest]
+addopts = 
+    --browser chromium
+    --video on
+    --video-dir videos/
+    --screenshot only-on-failure
+```
+
+Video recording modes:
+- `on`: Always record videos
+- `off`: Never record videos (default)
+- `retain-on-failure`: Record all tests but keep only failed ones
+
+## Getting Video Path
+
+Retrieve the video path programmatically:
+
+```python
+def test_get_video_path(browser: Browser):
+    context = browser.new_context(record_video_dir="videos/")
+    page = context.new_page()
+    
+    page.goto("https://example.com")
+    
+    # Get video object
+    video = page.video
+    
+    # Perform test actions
+    page.click("a")
+    
+    # Close context to finalize video
+    context.close()
+    
+    # Get video path after closing
+    video_path = video.path()
+    print(f"Video saved at: {video_path}")
+    
+    assert video_path is not None
+    assert video_path.endswith(".webm")
+```
+
+## Video Recording in Parallel Tests
+
+When running tests in parallel with pytest-xdist, ensure each test has a unique video directory:
+
+```python
+import pytest
+from playwright.sync_api import Browser
+import os
+
+@pytest.fixture
+def parallel_video_context(browser: Browser, worker_id):
+    """Video context for parallel test execution."""
+    video_dir = f"videos/{worker_id}/"
+    os.makedirs(video_dir, exist_ok=True)
+    
+    context = browser.new_context(
+        record_video_dir=video_dir
+    )
+    
+    yield context
+    context.close()
+
+def test_parallel_1(parallel_video_context):
+    page = parallel_video_context.new_page()
+    page.goto("https://example.com")
+
+def test_parallel_2(parallel_video_context):
+    page = parallel_video_context.new_page()
+    page.goto("https://playwright.dev")
+```
+
+Run with:
+```bash
+pytest -n auto
+```
+
+## Organizing Videos by Test Suite
+
+```python
+import pytest
+from playwright.sync_api import Browser
+from pathlib import Path
+
+@pytest.fixture
+def organized_video_context(browser: Browser, request):
+    """Organize videos by test module and class."""
+    # Get test location info
+    module_name = request.module.__name__
+    class_name = request.cls.__name__ if request.cls else "standalone"
+    test_name = request.node.name
+    
+    # Create organized directory structure
+    video_dir = Path("videos") / module_name / class_name
+    video_dir.mkdir(parents=True, exist_ok=True)
+    
+    context = browser.new_context(
+        record_video_dir=str(video_dir)
+    )
+    
+    yield context
+    context.close()
+
+class TestLogin:
+    def test_valid_credentials(self, organized_video_context):
+        page = organized_video_context.new_page()
+        page.goto("https://example.com/login")
+        # Video saved to: videos/test_login/TestLogin/
+    
+    def test_invalid_credentials(self, organized_video_context):
+        page = organized_video_context.new_page()
+        page.goto("https://example.com/login")
+        # Video saved to: videos/test_login/TestLogin/
+```
+
+## Best Practices
+
+<Warning>
+**Watch Out For:**
+- Videos consume significant disk space
+- Recording impacts test performance slightly
+- Videos aren't saved until context closes
+- Large videos can slow down CI/CD pipelines
+</Warning>
+
+<Tip>
+**Best Practices:**
+- Record videos only for critical tests or on failure
+- Set up automatic cleanup of old videos
+- Use lower resolution for faster processing
+- Configure retention policies in CI/CD
+- Name videos descriptively for easy identification
+</Tip>
+
+## CI/CD Integration
+
+### GitHub Actions Example
+
+```yaml
+name: Playwright Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install playwright pytest-playwright
+        playwright install chromium
+    
+    - name: Run tests
+      run: pytest --video retain-on-failure
+    
+    - name: Upload videos
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-videos
+        path: videos/
+        retention-days: 7
+```
+
+### GitLab CI Example
+
+```yaml
+test:
+  image: mcr.microsoft.com/playwright/python:v1.40.0
+  script:
+    - pip install playwright pytest-playwright
+    - pytest --video retain-on-failure
+  artifacts:
+    when: on_failure
+    paths:
+      - videos/
+    expire_in: 1 week
+```
+
+## Viewing Videos
+
+Videos are saved in WebM format. View them using:
+
+- **Web browsers**: Chrome, Firefox, Edge (drag and drop)
+- **Media players**: VLC, Windows Media Player, QuickTime
+- **Command line**: `vlc video.webm` or `ffplay video.webm`
+
+### Converting to MP4
+
+```bash
+ffmpeg -i video.webm -c:v libx264 video.mp4
+```
+
+## Troubleshooting
+
+### Videos Not Being Saved
+
+<Steps>
+  <Step title="Ensure Context is Closed">
+    Videos are only saved when the browser context closes:
+    ```python
+    context = browser.new_context(record_video_dir="videos/")
+    page = context.new_page()
+    # ... test actions ...
+    context.close()  # Required!
+    ```
+  </Step>
+
+  <Step title="Check Directory Permissions">
+    Ensure the video directory is writable:
+    ```bash
+    mkdir -p videos
+    chmod 755 videos
+    ```
+  </Step>
+
+  <Step title="Verify Directory Path">
+    Use absolute paths or ensure relative paths are correct:
+    ```python
+    from pathlib import Path
+    video_dir = Path(__file__).parent / "videos"
+    video_dir.mkdir(exist_ok=True)
+    context = browser.new_context(record_video_dir=str(video_dir))
+    ```
+  </Step>
+</Steps>
+
+### Large Video Files
+
+Reduce video size:
+
+```python
+context = browser.new_context(
+    record_video_dir="videos/",
+    record_video_size={"width": 1280, "height": 720},  # Lower resolution
+    viewport={"width": 1280, "height": 720}
+)
+```
+
+## When to Record Videos
+
+<CardGroup cols={2}>
+  <Card title="✅ Record When" icon="check">
+    - Running in CI/CD (headless mode)
+    - Debugging flaky tests
+    - Creating documentation
+    - Compliance and auditing needs
+  </Card>
+  <Card title="❌ Skip Recording" icon="xmark">
+    - Running locally with headed browser
+    - Unit or API tests
+    - Performance testing
+    - When disk space is limited
+  </Card>
+</CardGroup>

@@ -1,0 +1,461 @@
+---
+title: Behavior Driven Development (BDD)
+description: Learn how to write BDD-style tests using Behave with Playwright Python for readable, business-focused test scenarios
+---
+
+## What is BDD?
+
+Behavior Driven Development (BDD) is a software development approach that focuses on describing application behavior in plain language that stakeholders can understand. Tests are written in a Given-When-Then format that reads like natural language.
+
+<Note>
+BDD bridges the gap between technical and non-technical team members by using scenarios written in plain English.
+</Note>
+
+## Why Use BDD?
+
+<CardGroup cols={2}>
+  <Card title="Readable by Everyone" icon="book-open">
+    Tests are written in plain language that anyone can understand
+  </Card>
+  <Card title="Business-Focused" icon="briefcase">
+    Scenarios describe behavior from user's perspective
+  </Card>
+  <Card title="Living Documentation" icon="file-lines">
+    Feature files serve as up-to-date documentation
+  </Card>
+  <Card title="Collaboration" icon="users">
+    Improves communication between developers, QA, and business
+  </Card>
+</CardGroup>
+
+## BDD with Behave and Playwright
+
+Behave is Python's most popular BDD framework. Combined with Playwright, you can write readable end-to-end tests.
+
+### Installation
+
+```bash
+pip install behave playwright pytest-playwright
+```
+
+## Project Structure
+
+Organize your BDD tests with this structure:
+
+```
+project/
+├── features/
+│   ├── steps/
+│   │   ├── login.py
+│   │   └── navigation.py
+│   ├── environment.py
+│   ├── login.feature
+│   └── search.feature
+└── pytest.ini
+```
+
+## Setting Up Playwright with Behave
+
+<Steps>
+  <Step title="Create environment.py">
+    The `environment.py` file contains hooks that run before and after scenarios.
+
+    ```python
+    from playwright.sync_api import sync_playwright
+
+    def before_scenario(context, _):
+        context.playwright = sync_playwright().start()
+        context.browser = context.playwright.chromium.launch(
+            headless=False, slow_mo=500
+        )
+        context.page = context.browser.new_page()
+
+    def after_scenario(context, _):
+        context.browser.close()
+        context.playwright.stop()
+    ```
+
+    <Tip>
+    Use `slow_mo=500` during development to see actions more clearly. Remove it for faster test execution.
+    </Tip>
+  </Step>
+
+  <Step title="Write a Feature File">
+    Create a `.feature` file describing the behavior in Gherkin syntax.
+
+    ```gherkin
+    # features/login.feature
+    Feature: User Login
+      As a user
+      I want to log into the application
+      So that I can access my account
+
+      Scenario: Successful login with valid credentials
+        Given username and pwd password
+        When Log In button clicked
+        Then show welcome message
+
+      Scenario: Failed login with invalid credentials
+        Given username "invalid" and password "wrong"
+        When Log In button clicked
+        Then show error message "Invalid username/password"
+    ```
+  </Step>
+
+  <Step title="Implement Step Definitions">
+    Create Python functions that implement each step.
+
+    ```python
+    from behave import *
+    from playwright.sync_api import expect
+
+    @given("username and pwd password")
+    def fill_username_and_password(context):
+        context.page.goto("http://uitestingplayground.com/sampleapp")
+        
+        context.page.get_by_placeholder("User Name").fill("name")
+        context.page.get_by_placeholder("********").fill("pwd")
+
+    @when("Log In button clicked")
+    def click_login(context):
+        context.page.get_by_role(
+            "button", name="Log In"
+        ).click()
+
+    @then("show welcome message")
+    def expect_welcome_message(context):
+        message = context.page.locator("css=label#loginstatus")
+        expect(message).to_have_text("Welcome, name!")
+    ```
+  </Step>
+
+  <Step title="Run the Tests">
+    ```bash
+    behave
+    ```
+
+    Or run a specific feature:
+    ```bash
+    behave features/login.feature
+    ```
+  </Step>
+</Steps>
+
+## Gherkin Syntax Basics
+
+### Given-When-Then Structure
+
+```gherkin
+Scenario: User searches for a product
+  Given the user is on the homepage
+  And the user is logged in
+  When the user searches for "laptop"
+  And clicks the search button
+  Then search results should be displayed
+  And results should contain "laptop"
+```
+
+- **Given**: Sets up the initial context
+- **When**: Describes the action being tested
+- **Then**: Specifies the expected outcome
+- **And/But**: Continues the previous step type
+
+### Scenario Outlines with Examples
+
+Test multiple data sets with scenario outlines:
+
+```gherkin
+Feature: Login Validation
+
+  Scenario Outline: Test login with multiple users
+    Given the user is on the login page
+    When the user enters "<username>" and "<password>"
+    And clicks the login button
+    Then the user should see "<message>"
+
+    Examples:
+      | username | password | message          |
+      | dan      | pwd      | Welcome, dan!    |
+      | john     | pwd      | Welcome, john!   |
+      | alice    | pwd      | Welcome, alice!  |
+```
+
+Implementation:
+
+```python
+from behave import *
+from playwright.sync_api import expect
+
+@given("the user is on the login page")
+def navigate_to_login(context):
+    context.page.goto("http://uitestingplayground.com/sampleapp")
+
+@when('the user enters "{username}" and "{password}"')
+def enter_credentials(context, username, password):
+    context.page.get_by_placeholder("User Name").fill(username)
+    context.page.get_by_placeholder("********").fill(password)
+
+@when("clicks the login button")
+def click_login_button(context):
+    context.page.get_by_role("button", name="Log In").click()
+
+@then('the user should see "{message}"')
+def verify_message(context, message):
+    label = context.page.locator("label#loginstatus")
+    expect(label).to_have_text(message)
+```
+
+## Advanced Behave Features
+
+### Using Context for Shared State
+
+The `context` object can store data between steps:
+
+```python
+@given("the user creates a new account")
+def create_account(context):
+    context.username = "newuser123"
+    context.email = "newuser@example.com"
+    # Create account logic...
+
+@when("the user logs in with the new account")
+def login_with_new_account(context):
+    # Access stored username
+    context.page.get_by_placeholder("Username").fill(context.username)
+    # Login logic...
+```
+
+### Tags for Organizing Tests
+
+Use tags to organize and selectively run scenarios:
+
+```gherkin
+@smoke @login
+Scenario: Quick login test
+  Given the user is on the login page
+  When the user logs in with valid credentials
+  Then the dashboard should be displayed
+
+@slow @integration
+Scenario: Complete user journey
+  Given the user is logged in
+  When the user completes a purchase
+  Then the order confirmation should appear
+```
+
+Run only smoke tests:
+```bash
+behave --tags=smoke
+```
+
+Run everything except slow tests:
+```bash
+behave --tags="not slow"
+```
+
+Run smoke tests for login:
+```bash
+behave --tags=smoke --tags=login
+```
+
+### Background for Common Setup
+
+Use `Background` to avoid repeating steps:
+
+```gherkin
+Feature: Shopping Cart
+
+  Background:
+    Given the user is logged in
+    And the shopping cart is empty
+
+  Scenario: Add item to cart
+    When the user adds a product to cart
+    Then the cart should contain 1 item
+
+  Scenario: Remove item from cart
+    Given the cart contains a product
+    When the user removes the product
+    Then the cart should be empty
+```
+
+## Hooks in environment.py
+
+### Before and After Hooks
+
+```python
+from playwright.sync_api import sync_playwright
+
+def before_all(context):
+    """Runs once before all tests"""
+    context.test_data = load_test_data()
+
+def before_feature(context, feature):
+    """Runs before each feature"""
+    print(f"Starting feature: {feature.name}")
+
+def before_scenario(context, scenario):
+    """Runs before each scenario"""
+    context.playwright = sync_playwright().start()
+    context.browser = context.playwright.chromium.launch(
+        headless=False,
+        slow_mo=500
+    )
+    context.page = context.browser.new_page()
+
+def after_scenario(context, scenario):
+    """Runs after each scenario"""
+    # Take screenshot on failure
+    if scenario.status == "failed":
+        context.page.screenshot(path=f"failed_{scenario.name}.png")
+    
+    context.browser.close()
+    context.playwright.stop()
+
+def after_feature(context, feature):
+    """Runs after each feature"""
+    print(f"Completed feature: {feature.name}")
+
+def after_all(context):
+    """Runs once after all tests"""
+    generate_report(context)
+```
+
+## Page Objects with BDD
+
+Combine Page Object Model with BDD for maintainable tests:
+
+```python
+# pages/login_page.py
+from playwright.sync_api import Page
+
+class LoginPage:
+    def __init__(self, page: Page):
+        self.page = page
+        self.username_input = page.get_by_placeholder("User Name")
+        self.password_input = page.get_by_placeholder("********")
+        self.login_button = page.get_by_role("button", name="Log In")
+        self.status_label = page.locator("label#loginstatus")
+
+    def navigate(self):
+        self.page.goto("http://uitestingplayground.com/sampleapp")
+
+    def login(self, username, password):
+        self.username_input.fill(username)
+        self.password_input.fill(password)
+        self.login_button.click()
+```
+
+```python
+# steps/login.py
+from behave import *
+from playwright.sync_api import expect
+from pages.login_page import LoginPage
+
+@given("the user is on the login page")
+def navigate_to_login(context):
+    context.login_page = LoginPage(context.page)
+    context.login_page.navigate()
+
+@when('the user logs in with "{username}" and "{password}"')
+def perform_login(context, username, password):
+    context.login_page.login(username, password)
+
+@then('the status message should be "{message}"')
+def verify_status(context, message):
+    expect(context.login_page.status_label).to_have_text(message)
+```
+
+## Best Practices
+
+<Warning>
+**Avoid These Mistakes:**
+- Don't put technical details in feature files
+- Don't write steps that are too granular
+- Don't duplicate step definitions
+- Don't use BDD for unit tests
+</Warning>
+
+<Tip>
+**Do This Instead:**
+- Write scenarios from user's perspective
+- Keep steps at the right level of abstraction
+- Reuse step definitions across features
+- Use BDD for integration and E2E tests
+- Make scenarios independent of each other
+</Tip>
+
+### Good Example
+
+```gherkin
+Scenario: User completes checkout
+  Given the user has items in their cart
+  When the user proceeds to checkout
+  And enters valid payment information
+  Then the order should be confirmed
+```
+
+### Bad Example
+
+```gherkin
+Scenario: User completes checkout
+  Given the user clicks the cart icon in the top right
+  And the cart modal appears with id "cart-modal"
+  When the user clicks the button with class "checkout-btn"
+  And fills input field "#card-number" with "4111111111111111"
+  Then the element with xpath "//div[@id='confirmation']" should be visible
+```
+
+## Running and Reporting
+
+### Basic Commands
+
+```bash
+# Run all tests
+behave
+
+# Run with verbose output
+behave --verbose
+
+# Run specific feature
+behave features/login.feature
+
+# Run specific scenario by line number
+behave features/login.feature:10
+
+# Show available steps
+behave --steps-catalog
+
+# Dry run (don't execute, just check syntax)
+behave --dry-run
+```
+
+### Generate Reports
+
+```bash
+# JUnit XML report
+behave --junit --junit-directory reports/
+
+# JSON report
+behave --format json --outfile reports/results.json
+
+# HTML report (requires behave-html-formatter)
+behave --format html --outfile reports/results.html
+```
+
+## When to Use BDD
+
+<CardGroup cols={2}>
+  <Card title="✅ Use BDD When" icon="check">
+    - Testing user-facing features
+    - Collaboration with non-technical stakeholders
+    - Need for living documentation
+    - Testing complex business workflows
+  </Card>
+  <Card title="❌ Skip BDD When" icon="xmark">
+    - Writing unit tests
+    - Testing internal APIs
+    - Working alone on small projects
+    - Need for very fast test execution
+  </Card>
+</CardGroup>

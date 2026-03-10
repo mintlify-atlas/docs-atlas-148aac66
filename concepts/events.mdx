@@ -1,0 +1,344 @@
+---
+title: 'Events'
+description: 'Handle browser events and control page lifecycle in Playwright Python'
+---
+
+# Events
+
+Playwright provides powerful event handling capabilities to respond to browser actions, page lifecycle changes, and user interactions. Understanding events is crucial for building robust automation scripts.
+
+## Page Lifecycle Events
+
+Control when navigation is considered complete using the `wait_until` parameter.
+
+### Navigation Wait States
+
+Playwright supports four different wait states for navigation:
+
+<Tabs>
+  <Tab title="load (default)">
+    Wait until the `load` event is fired (HTML loaded along with resources like stylesheets and images).
+    
+    ```python
+    from playwright.sync_api import sync_playwright
+    from time import perf_counter
+    
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=False, slow_mo=500)
+        page = browser.new_page()
+        
+        print("Page loading...")
+        start = perf_counter()
+        
+        # Default: wait until load event
+        page.goto(
+            "https://playwright.dev/python/",
+            wait_until='load'
+        )
+        
+        time_taken = perf_counter() - start
+        print(f"...Page loaded in {round(time_taken, 2)}s")
+        
+        browser.close()
+    ```
+  </Tab>
+  
+  <Tab title="domcontentloaded">
+    Wait until the `DOMContentLoaded` event is fired (HTML parsed and `<script>` tags executed).
+    
+    ```python
+    # Faster - doesn't wait for stylesheets and images
+    page.goto(
+        "https://playwright.dev/python/",
+        wait_until='domcontentloaded'
+    )
+    ```
+  </Tab>
+  
+  <Tab title="commit">
+    Wait until the response is received (fastest option).
+    
+    ```python
+    # Fastest - just waits for response
+    page.goto(
+        "https://playwright.dev/python/",
+        wait_until='commit'
+    )
+    ```
+  </Tab>
+  
+  <Tab title="networkidle">
+    Wait until there are no network connections for at least 500ms.
+    
+    ```python
+    # Slowest - waits for network to be idle
+    page.goto(
+        "https://playwright.dev/python/",
+        wait_until='networkidle'
+    )
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+The `load` state is recommended for most cases as it balances speed and reliability. Use `networkidle` only when you need to ensure all background requests have completed.
+</Note>
+
+## Custom Waits
+
+For dynamic content loaded via JavaScript, use custom wait strategies.
+
+```python
+from playwright.sync_api import sync_playwright
+from time import perf_counter
+
+with sync_playwright() as playwright:
+    browser = playwright.chromium.launch(headless=False, slow_mo=500)
+    page = browser.new_page()
+    page.goto("https://www.scrapethissite.com/pages/ajax-javascript/")
+    
+    # Click to load new data
+    link = page.get_by_role("link", name="2015")
+    link.click()
+    
+    print("Loading oscars for 2015...")
+    start = perf_counter()
+    
+    # Wait for specific element to appear
+    first_table_data = page.locator("td.film-title").first
+    first_table_data.wait_for()
+    
+    time_taken = perf_counter() - start
+    print(f"...movies are loaded, in {round(time_taken, 2)}s!")
+    
+    browser.close()
+```
+
+<Steps>
+  <Step title="Trigger the action">
+    Perform the action that will load dynamic content:
+    ```python
+    link.click()
+    ```
+  </Step>
+  
+  <Step title="Wait for element">
+    Wait for a specific element that indicates content is loaded:
+    ```python
+    first_table_data = page.locator("td.film-title").first
+    first_table_data.wait_for()
+    ```
+  </Step>
+  
+  <Step title="Continue execution">
+    Once the element appears, continue with your automation.
+  </Step>
+</Steps>
+
+## Download Events
+
+Handle file downloads using download events and expectations.
+
+### Using Event Listeners
+
+```python
+from playwright.sync_api import sync_playwright
+
+# Download event handler
+def on_download(download):
+    print("Download received!")
+    download.save_as("night.jpg")
+
+with sync_playwright() as playwright:
+    browser = playwright.chromium.launch(headless=False, slow_mo=200)
+    page = browser.new_page()
+    page.goto("https://unsplash.com/photos/NDRwHCC7JuI")
+    
+    # Register listener (fires once)
+    page.once("download", on_download)
+    
+    # Trigger download
+    btn = page.get_by_role("link", name="Download free")
+    btn.click()
+    
+    browser.close()
+```
+
+### Using Download Expectations
+
+<CodeGroup>
+```python With Context Manager
+# Expect download using context manager
+with page.expect_download() as download_info:
+    # Trigger download
+    btn.click()
+
+# Save the download
+download = download_info.value
+download.save_as("moon.jpg")
+```
+
+```python With Event Listener
+# Register once listener
+def on_download(download):
+    print("Download received!")
+    download.save_as("file.jpg")
+
+page.once("download", on_download)
+
+# Trigger download
+btn.click()
+```
+</CodeGroup>
+
+<Warning>
+Make sure to handle downloads before the browser closes, otherwise the download might be cancelled.
+</Warning>
+
+## Async Event Handling
+
+Playwright also supports asynchronous event handling for better performance in concurrent scenarios.
+
+```python
+import asyncio
+from playwright.async_api import async_playwright
+
+async def main():
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=False)
+        page = await browser.new_page()
+        
+        await page.goto("https://playwright.dev")
+        
+        print(await page.title())
+        
+        await browser.close()
+
+asyncio.run(main())
+```
+
+<Tabs>
+  <Tab title="Synchronous">
+    ```python
+    from playwright.sync_api import sync_playwright
+    
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page()
+        page.goto("https://example.com")
+        print(page.title())
+        browser.close()
+    ```
+  </Tab>
+  
+  <Tab title="Asynchronous">
+    ```python
+    import asyncio
+    from playwright.async_api import async_playwright
+    
+    async def main():
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            page = await browser.new_page()
+            await page.goto("https://example.com")
+            print(await page.title())
+            await browser.close()
+    
+    asyncio.run(main())
+    ```
+  </Tab>
+</Tabs>
+
+## Common Event Patterns
+
+<CardGroup cols={2}>
+  <Card title="Page Events" icon="file">
+    ```python
+    # Listen to page events
+    page.on("load", lambda: print("Page loaded!"))
+    page.on("domcontentloaded", lambda: print("DOM ready!"))
+    ```
+  </Card>
+  
+  <Card title="Request Events" icon="network-wired">
+    ```python
+    # Listen to network requests
+    page.on("request", lambda req: print(f"Request: {req.url}"))
+    page.on("response", lambda res: print(f"Response: {res.status}"))
+    ```
+  </Card>
+  
+  <Card title="Dialog Events" icon="comment">
+    ```python
+    # Handle alerts and dialogs
+    page.on("dialog", lambda dialog: dialog.accept())
+    ```
+  </Card>
+  
+  <Card title="Console Events" icon="terminal">
+    ```python
+    # Listen to console messages
+    page.on("console", lambda msg: print(f"Console: {msg.text}"))
+    ```
+  </Card>
+</CardGroup>
+
+## Wait Methods
+
+Playwright provides several methods to wait for specific conditions:
+
+```python
+# Wait for element
+element.wait_for(state="visible")
+
+# Wait for selector
+page.wait_for_selector("button.submit")
+
+# Wait for function
+page.wait_for_function("() => document.readyState === 'complete'")
+
+# Wait for timeout
+page.wait_for_timeout(1000)  # milliseconds
+
+# Wait for URL
+page.wait_for_url("https://example.com/success")
+
+# Wait for load state
+page.wait_for_load_state("networkidle")
+```
+
+<Note>
+Playwright's auto-waiting mechanism handles most waiting scenarios automatically. Explicit waits should be used only when necessary.
+</Note>
+
+## Best Practices
+
+<Steps>
+  <Step title="Use auto-waiting when possible">
+    Rely on Playwright's built-in auto-waiting for actions and assertions.
+  </Step>
+  
+  <Step title="Choose appropriate wait states">
+    Use `load` for most pages, `networkidle` only when needed for dynamic content.
+  </Step>
+  
+  <Step title="Handle events gracefully">
+    Always register event handlers before triggering the action that fires the event.
+  </Step>
+  
+  <Step title="Clean up resources">
+    Ensure browsers are closed properly, especially when handling downloads or long-running operations.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Locators" href="/concepts/locators">
+    Learn how to find elements on the page
+  </Card>
+  
+  <Card title="Web-First Assertions" href="/concepts/web-first-assertions">
+    Make reliable assertions with auto-waiting
+  </Card>
+</CardGroup>

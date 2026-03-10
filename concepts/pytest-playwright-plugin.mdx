@@ -1,0 +1,495 @@
+---
+title: 'pytest-playwright Plugin'
+description: 'Use the official Playwright plugin for pytest to streamline browser testing'
+---
+
+# pytest-playwright Plugin
+
+The `pytest-playwright` plugin is the official way to use Playwright with pytest. It provides convenient fixtures for browsers, contexts, and pages, along with powerful configuration options.
+
+## Installation
+
+Install the plugin using pip:
+
+```bash
+pip install pytest-playwright
+```
+
+Then install the browsers:
+
+```bash
+playwright install
+```
+
+<Note>
+The plugin automatically manages browser instances, contexts, and pages for you, reducing boilerplate code.
+</Note>
+
+## Built-in Fixtures
+
+The plugin provides several fixtures out of the box:
+
+<Tabs>
+  <Tab title="page">
+    The most commonly used fixture - provides a new page for each test.
+    
+    ```python
+    from playwright.sync_api import Page
+    
+    def test_basic(page: Page):
+        page.goto("https://playwright.dev/python")
+        assert page.title() == "Fast and reliable end-to-end testing"
+    ```
+  </Tab>
+  
+  <Tab title="context">
+    Provides a browser context. Useful when you need multiple pages.
+    
+    ```python
+    from playwright.sync_api import BrowserContext
+    
+    def test_multiple_pages(context: BrowserContext):
+        page1 = context.new_page()
+        page2 = context.new_page()
+        
+        page1.goto("https://example.com")
+        page2.goto("https://example.org")
+    ```
+  </Tab>
+  
+  <Tab title="browser">
+    Provides a browser instance. Useful for creating custom contexts.
+    
+    ```python
+    from playwright.sync_api import Browser
+    
+    def test_custom_context(browser: Browser):
+        context = browser.new_context(viewport={"width": 1920, "height": 1080})
+        page = context.new_page()
+        page.goto("https://example.com")
+    ```
+  </Tab>
+  
+  <Tab title="playwright">
+    Provides the Playwright instance. Rarely needed.
+    
+    ```python
+    from playwright.sync_api import Playwright
+    
+    def test_playwright_instance(playwright: Playwright):
+        browser = playwright.firefox.launch()
+        page = browser.new_page()
+        page.goto("https://example.com")
+    ```
+  </Tab>
+</Tabs>
+
+## Basic Usage
+
+Here's a simple test using the `page` fixture:
+
+```python
+from playwright.sync_api import Page
+
+DOCS_URL = "https://playwright.dev/python/docs/intro"
+
+def test_page_has_get_started_link(page: Page):
+    page.goto("https://playwright.dev/python")
+    
+    link = page.get_by_role("link", name="GET STARTED")
+    link.click()
+    
+    assert page.url == DOCS_URL
+```
+
+<Steps>
+  <Step title="Import the Page type">
+    ```python
+    from playwright.sync_api import Page
+    ```
+  </Step>
+  
+  <Step title="Add page fixture as parameter">
+    ```python
+    def test_page_has_get_started_link(page: Page):
+    ```
+  </Step>
+  
+  <Step title="Use the page in your test">
+    ```python
+    page.goto("https://playwright.dev/python")
+    link = page.get_by_role("link", name="GET STARTED")
+    link.click()
+    ```
+  </Step>
+</Steps>
+
+<Note>
+The `page` fixture automatically creates a new browser, context, and page before each test, and closes them after the test completes.
+</Note>
+
+## Custom Fixtures
+
+You can create custom fixtures that wrap the built-in ones:
+
+### Setup Fixture
+
+```python
+import pytest
+from playwright.sync_api import Page
+
+DOCS_URL = "https://playwright.dev/python/docs/intro"
+
+@pytest.fixture(autouse=True, scope="function")
+def visit_playwright(page: Page):
+    # Setup
+    page.goto("https://playwright.dev/python")
+    
+    # Yield page to test
+    yield page
+    
+    # Teardown
+    page.close()
+    print("\n[ Fixture ]: page closed!")
+
+def test_page_has_docs_link(page: Page):
+    link = page.get_by_role("link", name="Docs")
+    assert link.is_visible()
+
+def test_get_started_visits_docs(page: Page):
+    link = page.get_by_role("link", name="GET STARTED")
+    link.click()
+    
+    assert page.url == DOCS_URL
+```
+
+### Page Wrapper Fixture
+
+```python
+import pytest
+from playwright.sync_api import Page
+
+DOCS_URL = "https://playwright.dev/python/docs/intro"
+
+@pytest.fixture
+def playwright_page(page: Page):
+    page.goto("https://playwright.dev/python")
+    return page
+
+def test_page_has_docs_link(playwright_page: Page):
+    link = playwright_page.get_by_role("link", name="Docs")
+    assert link.is_visible()
+
+def test_get_started_visits_docs(playwright_page: Page):
+    link = playwright_page.get_by_role("link", name="GET STARTED")
+    link.click()
+    
+    assert playwright_page.url == DOCS_URL
+```
+
+<Warning>
+With `autouse=True`, the fixture runs for every test automatically. Without it, you need to explicitly request the fixture by adding it as a parameter.
+</Warning>
+
+## Configuration Fixtures
+
+Override plugin configuration by defining specific fixtures in `conftest.py`:
+
+### Browser Type
+
+```python
+import pytest
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    return {
+        **browser_type_launch_args,
+        "headless": False,
+        "slow_mo": 500,
+    }
+```
+
+### Browser Context
+
+```python
+import pytest
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    return {
+        **browser_context_args,
+        "viewport": {"width": 1920, "height": 1080},
+        "locale": "en-US",
+        "timezone_id": "America/New_York",
+    }
+```
+
+### Complete Example
+
+```python
+import pytest
+from playwright.sync_api import Page, expect
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    return {
+        **browser_type_launch_args,
+        "headless": False,
+        "slow_mo": 500,
+    }
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    return {
+        **browser_context_args,
+        "storage_state": "playwright/.auth/storage_state.json",
+    }
+
+def test_page_has_docs_link(page: Page):
+    page.goto("http://playwright.dev/python")
+    docs_link = page.get_by_role("link", name="Docs")
+    expect(docs_link).to_be_visible()
+
+def test_visits_google_account(page: Page):
+    page.goto("https://accounts.google.com")
+    page.screenshot(path="account.jpg")
+```
+
+<Note>
+Using `scope="session"` means these fixtures run once for the entire test session, sharing the configuration across all tests.
+</Note>
+
+## pytest Configuration
+
+Configure the plugin using `pytest.ini`:
+
+```ini
+[pytest]
+addopts = --headed --slowmo=500
+```
+
+<Tabs>
+  <Tab title="Browser Mode">
+    ```ini
+    [pytest]
+    # Run in headed mode (visible browser)
+    addopts = --headed
+    
+    # Or headless mode (default)
+    addopts = --headless
+    ```
+  </Tab>
+  
+  <Tab title="Browser Selection">
+    ```ini
+    [pytest]
+    # Test on specific browser
+    addopts = --browser chromium
+    
+    # Test on multiple browsers
+    addopts = --browser chromium --browser firefox --browser webkit
+    ```
+  </Tab>
+  
+  <Tab title="Speed Control">
+    ```ini
+    [pytest]
+    # Slow down actions by 500ms
+    addopts = --slowmo=500
+    ```
+  </Tab>
+  
+  <Tab title="Screenshots">
+    ```ini
+    [pytest]
+    # Take screenshot on failure
+    addopts = --screenshot on
+    
+    # Or always
+    addopts = --screenshot only-on-failure
+    ```
+  </Tab>
+</Tabs>
+
+## Command Line Options
+
+The plugin adds several command-line options:
+
+<CodeGroup>
+```bash Browser selection
+# Run tests in specific browser
+pytest --browser chromium
+pytest --browser firefox
+pytest --browser webkit
+
+# Run tests in all browsers
+pytest --browser chromium --browser firefox --browser webkit
+```
+
+```bash Display options
+# Run in headed mode
+pytest --headed
+
+# Slow down execution
+pytest --slowmo=1000
+```
+
+```bash Debugging
+# Save traces on failure
+pytest --tracing on
+
+# Take screenshots
+pytest --screenshot only-on-failure
+
+# Record video
+pytest --video on
+```
+</CodeGroup>
+
+## Hooks and Customization
+
+The plugin provides hooks for advanced customization:
+
+```python
+import pytest
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args, playwright):
+    """
+    Customize browser context arguments.
+    """
+    return {
+        **browser_context_args,
+        "viewport": {"width": 1920, "height": 1080},
+        "user_agent": "Custom User Agent",
+    }
+
+@pytest.fixture(autouse=True)
+def before_each(page):
+    """
+    Runs before each test.
+    """
+    print("\n[ Hook ]: Test starting...")
+    yield
+    print("\n[ Hook ]: Test completed!")
+```
+
+Example with hooks:
+
+```python
+import pytest
+from playwright.sync_api import Page
+
+DOCS_URL = "https://playwright.dev/python/docs/intro"
+
+@pytest.fixture(autouse=True, scope="function")
+def visit_playwright(page: Page):
+    # Setup
+    page.goto("https://playwright.dev/python")
+    # Yield value and pause
+    yield page
+    # Teardown
+    page.close()
+    print("\n[ Fixture ]: page closed!")
+
+def test_page_has_docs_link(page: Page):
+    link = page.get_by_role("link", name="Docs")
+    assert link.is_visible()
+
+def test_get_started_visits_docs(page: Page):
+    link = page.get_by_role("link", name="GET STARTED")
+    link.click()
+    
+    assert page.url == DOCS_URL
+```
+
+## Multi-Browser Testing
+
+Test across multiple browsers automatically:
+
+```python
+import pytest
+from playwright.sync_api import Page
+
+@pytest.mark.parametrize("browser_name", ["chromium", "firefox", "webkit"])
+def test_cross_browser(browser_name, playwright):
+    browser = getattr(playwright, browser_name).launch()
+    page = browser.new_page()
+    page.goto("https://playwright.dev/python")
+    assert "Playwright" in page.title()
+    browser.close()
+```
+
+Or configure in `pytest.ini`:
+
+```ini
+[pytest]
+addopts = --browser chromium --browser firefox --browser webkit
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Built-in Fixtures" icon="puzzle-piece">
+    Leverage the plugin's fixtures instead of managing browser lifecycle manually.
+  </Card>
+  
+  <Card title="Configure at Session Level" icon="gear">
+    Use `scope="session"` for configuration fixtures to share setup across tests.
+  </Card>
+  
+  <Card title="Use pytest.ini" icon="file-lines">
+    Store common options in `pytest.ini` instead of typing them every time.
+  </Card>
+  
+  <Card title="Organize with conftest.py" icon="folder-tree">
+    Put shared fixtures in `conftest.py` to make them available to all tests.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<Tabs>
+  <Tab title="Browser not launching">
+    **Problem**: Browser doesn't start
+    
+    **Solution**:
+    ```bash
+    # Reinstall browsers
+    playwright install
+    
+    # Install system dependencies (Linux)
+    playwright install-deps
+    ```
+  </Tab>
+  
+  <Tab title="Fixture not found">
+    **Problem**: pytest can't find the page fixture
+    
+    **Solution**:
+    - Verify `pytest-playwright` is installed
+    - Check import: `from playwright.sync_api import Page`
+    - Ensure fixture name matches: `def test_example(page: Page):`
+  </Tab>
+  
+  <Tab title="Configuration not applied">
+    **Problem**: pytest.ini settings not working
+    
+    **Solution**:
+    - Verify `pytest.ini` is in the project root
+    - Check section name is `[pytest]`
+    - Try command line to verify: `pytest --headed`
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Fixtures" href="/concepts/fixtures">
+    Learn about Playwright-specific fixtures
+  </Card>
+  
+  <Card title="Web-First Assertions" href="/concepts/web-first-assertions">
+    Make reliable assertions with auto-waiting
+  </Card>
+</CardGroup>

@@ -1,0 +1,580 @@
+---
+title: 'Fixtures'
+description: 'Master Playwright fixtures for efficient test setup and teardown in pytest'
+---
+
+# Fixtures
+
+Fixtures are one of pytest's most powerful features. They provide a way to set up test prerequisites, share resources across tests, and manage cleanup automatically. When combined with Playwright, fixtures become essential for efficient browser testing.
+
+## What Are Fixtures?
+
+Fixtures are functions that run before (and optionally after) your tests. They provide reusable setup code and can return data or objects that tests need.
+
+<Note>
+Think of fixtures as "test ingredients" - they prepare everything your test needs before it runs.
+</Note>
+
+## Basic Fixture Example
+
+Here's a simple example showing the problem fixtures solve:
+
+### Without Fixtures (Code Duplication)
+
+```python
+import json
+import report
+
+def test_report_json():
+    # Generate report
+    report.generate_report()
+    
+    # Load report
+    with open("report.json") as file:
+        report_json = json.load(file)
+    
+    assert type(report_json) == dict
+
+def test_report_fields():
+    # Generate report (duplicate!)
+    report.generate_report()
+    
+    # Load report (duplicate!)
+    with open("report.json") as file:
+        report_json = json.load(file)
+    
+    assert "timestamp" in report_json
+    assert "status" in report_json
+```
+
+### With Fixtures (DRY)
+
+```python
+import json
+import report
+import pytest
+
+@pytest.fixture
+def report_json():
+    print("\n[ Fixture ]: requested...")
+    report.generate_report()
+    
+    with open("report.json") as file:
+        print("[ Fixture ]: ...return report data")
+        return json.load(file)
+
+def test_report_json(report_json):
+    print("[ Test ]: received -", report_json)
+    assert type(report_json) == dict
+
+def test_report_fields(report_json):
+    print("[ Test ]: received -", report_json)
+    assert "timestamp" in report_json
+    assert "status" in report_json
+```
+
+<Steps>
+  <Step title="Define the fixture">
+    Create a function with `@pytest.fixture` decorator:
+    ```python
+    @pytest.fixture
+    def report_json():
+        # Setup code
+        return data
+    ```
+  </Step>
+  
+  <Step title="Request the fixture">
+    Add fixture name as test parameter:
+    ```python
+    def test_report_json(report_json):
+        # Use the fixture data
+        pass
+    ```
+  </Step>
+  
+  <Step title="pytest injects the value">
+    pytest automatically calls the fixture and passes its return value to the test.
+  </Step>
+</Steps>
+
+## Playwright Built-in Fixtures
+
+The `pytest-playwright` plugin provides several fixtures:
+
+<CardGroup cols={2}>
+  <Card title="page" icon="browser">
+    Most commonly used - provides a new page for each test.
+    ```python
+    def test_example(page: Page):
+        page.goto("https://example.com")
+    ```
+  </Card>
+  
+  <Card title="context" icon="window-restore">
+    Provides a browser context for creating multiple pages.
+    ```python
+    def test_example(context: BrowserContext):
+        page = context.new_page()
+    ```
+  </Card>
+  
+  <Card title="browser" icon="globe">
+    Provides a browser instance for custom contexts.
+    ```python
+    def test_example(browser: Browser):
+        context = browser.new_context()
+    ```
+  </Card>
+  
+  <Card title="playwright" icon="masks-theater">
+    Provides the Playwright instance (rarely needed).
+    ```python
+    def test_example(playwright: Playwright):
+        browser = playwright.firefox.launch()
+    ```
+  </Card>
+</CardGroup>
+
+## Custom Playwright Fixtures
+
+### Auto-Navigation Fixture
+
+Automatically navigate to a page before each test:
+
+```python
+import pytest
+from playwright.sync_api import Page
+
+DOCS_URL = "https://playwright.dev/python/docs/intro"
+
+@pytest.fixture(autouse=True, scope="function")
+def visit_playwright(page: Page):
+    # Setup - runs before each test
+    page.goto("https://playwright.dev/python")
+    
+    # Yield control to the test
+    yield page
+    
+    # Teardown - runs after each test
+    page.close()
+    print("\n[ Fixture ]: page closed!")
+
+def test_page_has_docs_link(page: Page):
+    link = page.get_by_role("link", name="Docs")
+    assert link.is_visible()
+
+def test_get_started_visits_docs(page: Page):
+    link = page.get_by_role("link", name="GET STARTED")
+    link.click()
+    assert page.url == DOCS_URL
+```
+
+<Warning>
+With `autouse=True`, the fixture runs automatically for every test in the module. Use this carefully to avoid unnecessary setup.
+</Warning>
+
+### Page Wrapper Fixture
+
+Create a custom page fixture that must be explicitly requested:
+
+```python
+import pytest
+from playwright.sync_api import Page
+
+DOCS_URL = "https://playwright.dev/python/docs/intro"
+
+@pytest.fixture
+def playwright_page(page: Page):
+    page.goto("https://playwright.dev/python")
+    return page
+
+def test_page_has_docs_link(playwright_page: Page):
+    link = playwright_page.get_by_role("link", name="Docs")
+    assert link.is_visible()
+
+def test_get_started_visits_docs(playwright_page: Page):
+    link = playwright_page.get_by_role("link", name="GET STARTED")
+    link.click()
+    assert playwright_page.url == DOCS_URL
+```
+
+## Fixture Scopes
+
+Fixture scope controls how often the fixture runs:
+
+<Tabs>
+  <Tab title="function">
+    Default scope - fixture runs once per test function.
+    
+    ```python
+    @pytest.fixture(scope="function")
+    def fresh_page(page: Page):
+        # Runs before each test
+        page.goto("https://example.com")
+        return page
+    
+    def test_one(fresh_page):
+        # Gets a fresh page
+        pass
+    
+    def test_two(fresh_page):
+        # Gets another fresh page
+        pass
+    ```
+  </Tab>
+  
+  <Tab title="class">
+    Fixture runs once per test class.
+    
+    ```python
+    @pytest.fixture(scope="class")
+    def shared_context(browser: Browser):
+        # Runs once for the class
+        context = browser.new_context()
+        yield context
+        context.close()
+    
+    class TestFeature:
+        def test_one(self, shared_context):
+            # Uses same context
+            page = shared_context.new_page()
+        
+        def test_two(self, shared_context):
+            # Uses same context
+            page = shared_context.new_page()
+    ```
+  </Tab>
+  
+  <Tab title="module">
+    Fixture runs once per test module (file).
+    
+    ```python
+    @pytest.fixture(scope="module")
+    def database_connection():
+        # Runs once per module
+        db = connect_database()
+        yield db
+        db.close()
+    ```
+  </Tab>
+  
+  <Tab title="session">
+    Fixture runs once per test session (entire test run).
+    
+    ```python
+    @pytest.fixture(scope="session")
+    def browser_type_launch_args(browser_type_launch_args):
+        # Runs once for entire test run
+        return {
+            **browser_type_launch_args,
+            "headless": False,
+            "slow_mo": 500,
+        }
+    ```
+  </Tab>
+</Tabs>
+
+## Configuration Fixtures
+
+Override Playwright plugin configuration using fixtures:
+
+### Browser Launch Arguments
+
+```python
+import pytest
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    return {
+        **browser_type_launch_args,
+        "headless": False,
+        "slow_mo": 500,
+        "args": [
+            "--start-maximized",
+        ],
+    }
+```
+
+### Browser Context Arguments
+
+```python
+import pytest
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    return {
+        **browser_context_args,
+        "viewport": {"width": 1920, "height": 1080},
+        "locale": "en-US",
+        "timezone_id": "America/New_York",
+        "permissions": ["geolocation"],
+    }
+```
+
+### Authentication State
+
+```python
+import pytest
+from playwright.sync_api import Page, expect
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    return {
+        **browser_type_launch_args,
+        "headless": False,
+        "slow_mo": 500,
+    }
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    return {
+        **browser_context_args,
+        "storage_state": "playwright/.auth/storage_state.json",
+    }
+
+def test_page_has_docs_link(page: Page):
+    page.goto("http://playwright.dev/python")
+    docs_link = page.get_by_role("link", name="Docs")
+    expect(docs_link).to_be_visible()
+
+def test_visits_google_account(page: Page):
+    page.goto("https://accounts.google.com")
+    page.screenshot(path="account.jpg")
+```
+
+<Note>
+Configuration fixtures should use `scope="session"` to apply settings once for all tests, improving performance.
+</Note>
+
+## Fixture Dependencies
+
+Fixtures can depend on other fixtures:
+
+```python
+import pytest
+from playwright.sync_api import Page, Browser, BrowserContext
+
+@pytest.fixture(scope="session")
+def custom_browser(playwright):
+    browser = playwright.chromium.launch(
+        headless=False,
+        slow_mo=500
+    )
+    yield browser
+    browser.close()
+
+@pytest.fixture
+def custom_context(custom_browser: Browser):
+    context = custom_browser.new_context(
+        viewport={"width": 1920, "height": 1080}
+    )
+    yield context
+    context.close()
+
+@pytest.fixture
+def custom_page(custom_context: BrowserContext):
+    page = custom_context.new_page()
+    page.goto("https://playwright.dev/python")
+    yield page
+    page.close()
+
+def test_with_custom_setup(custom_page: Page):
+    assert custom_page.viewport_size["width"] == 1920
+```
+
+## Fixture Teardown Patterns
+
+### Using yield
+
+```python
+import pytest
+
+@pytest.fixture
+def resource():
+    # Setup
+    resource = create_resource()
+    
+    # Provide resource to test
+    yield resource
+    
+    # Teardown (always runs, even if test fails)
+    resource.cleanup()
+```
+
+### Using finalizer
+
+```python
+import pytest
+
+@pytest.fixture
+def resource(request):
+    # Setup
+    resource = create_resource()
+    
+    # Register cleanup function
+    def cleanup():
+        resource.cleanup()
+    request.addfinalizer(cleanup)
+    
+    return resource
+```
+
+### Context manager
+
+```python
+import pytest
+from contextlib import contextmanager
+
+@contextmanager
+def resource_manager():
+    resource = create_resource()
+    try:
+        yield resource
+    finally:
+        resource.cleanup()
+
+@pytest.fixture
+def resource():
+    with resource_manager() as r:
+        yield r
+```
+
+## Fixture Best Practices
+
+<Steps>
+  <Step title="Choose appropriate scope">
+    Use the broadest scope possible that still provides isolation:
+    - `function` for test-specific setup
+    - `session` for expensive operations like browser launch
+  </Step>
+  
+  <Step title="Keep fixtures focused">
+    Each fixture should do one thing well:
+    ```python
+    # Good - focused fixture
+    @pytest.fixture
+    def logged_in_page(page):
+        login(page)
+        return page
+    
+    # Bad - fixture does too much
+    @pytest.fixture
+    def everything(page):
+        login(page)
+        setup_data()
+        configure_settings()
+        # ...
+    ```
+  </Step>
+  
+  <Step title="Use conftest.py">
+    Put shared fixtures in `conftest.py` to make them available to all tests.
+  </Step>
+  
+  <Step title="Document fixtures">
+    Add docstrings to explain what fixtures provide:
+    ```python
+    @pytest.fixture
+    def authenticated_page(page: Page):
+        """
+        Provides a page that is already logged in with a test user.
+        """
+        login(page, "testuser", "testpass")
+        return page
+    ```
+  </Step>
+</Steps>
+
+## Common Fixture Patterns
+
+<CardGroup cols={2}>
+  <Card title="Authenticated Page" icon="lock">
+    ```python
+    @pytest.fixture
+    def authenticated_page(page: Page):
+        page.goto("/login")
+        page.fill("#username", "user")
+        page.fill("#password", "pass")
+        page.click("button[type='submit']")
+        return page
+    ```
+  </Card>
+  
+  <Card title="Seeded Database" icon="database">
+    ```python
+    @pytest.fixture
+    def database():
+        db = create_database()
+        seed_test_data(db)
+        yield db
+        db.cleanup()
+    ```
+  </Card>
+  
+  <Card title="Temporary Directory" icon="folder">
+    ```python
+    @pytest.fixture
+    def temp_dir():
+        import tempfile
+        dir = tempfile.mkdtemp()
+        yield dir
+        shutil.rmtree(dir)
+    ```
+  </Card>
+  
+  <Card title="Mock Service" icon="server">
+    ```python
+    @pytest.fixture
+    def mock_api(page: Page):
+        page.route("**/api/**", 
+            lambda route: route.fulfill(
+                json={"status": "ok"}
+            )
+        )
+        return page
+    ```
+  </Card>
+</CardGroup>
+
+## Troubleshooting Fixtures
+
+<Tabs>
+  <Tab title="Fixture not found">
+    **Problem**: pytest can't find your fixture
+    
+    **Solution**:
+    - Check fixture name matches parameter name
+    - Ensure fixture is in `conftest.py` or same file
+    - Verify fixture decorator: `@pytest.fixture`
+  </Tab>
+  
+  <Tab title="Fixture runs too often">
+    **Problem**: Fixture executes more than expected
+    
+    **Solution**:
+    - Check the scope: use `scope="session"` or `scope="module"` for expensive operations
+    - Remove `autouse=True` if not needed
+  </Tab>
+  
+  <Tab title="Teardown not running">
+    **Problem**: Cleanup code doesn't execute
+    
+    **Solution**:
+    - Use `yield` instead of `return`
+    - Ensure code after `yield` is in the fixture
+    - Check for exceptions before `yield`
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="pytest Basics" href="/concepts/pytest-basics">
+    Learn more about pytest fundamentals
+  </Card>
+  
+  <Card title="pytest-playwright Plugin" href="/concepts/pytest-playwright-plugin">
+    Understand the plugin's built-in fixtures
+  </Card>
+</CardGroup>

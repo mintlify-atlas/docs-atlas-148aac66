@@ -1,0 +1,393 @@
+---
+title: 'Authentication'
+description: 'Learn how to handle authentication and persist login state in Playwright Python'
+---
+
+# Authentication
+
+Authentication is a common requirement in web testing. Playwright provides powerful features to handle authentication, save login state, and reuse it across multiple tests, making your test suite faster and more efficient.
+
+## Why Persist Authentication?
+
+Instead of logging in before every test, you can:
+
+- **Save time**: Authenticate once and reuse the session
+- **Avoid rate limiting**: Reduce the number of login requests
+- **Speed up tests**: Skip repetitive login flows
+- **Reduce flakiness**: Minimize interactions with authentication systems
+
+<Note>
+Playwright's storage state feature saves cookies, local storage, and session storage, allowing you to restore authenticated sessions instantly.
+</Note>
+
+## Saving Authentication State
+
+### Basic Authentication Flow
+
+Here's how to authenticate and save the session state:
+
+```python
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as playwright:
+    browser = playwright.chromium.launch(headless=False, slow_mo=500)
+    context = browser.new_context()
+    page = context.new_page()
+    
+    # Visit authentication page
+    page.goto("https://accounts.google.com")
+    
+    # Enter email address
+    email_input = page.get_by_label("Email or phone")
+    email_input.fill("your-email@example.com")
+    page.get_by_role("button", name="Next").click()
+    
+    # Enter password
+    password_input = page.get_by_label("Enter your password")
+    password_input.fill("your-password")
+    page.get_by_role("button", name="Next").click()
+    
+    # Pause for two-factor authentication if needed
+    page.pause()
+    
+    # Save authentication state
+    context.storage_state(
+        path="playwright/.auth/storage_state.json"
+    )
+    
+    browser.close()
+```
+
+<Steps>
+  <Step title="Create a browser context">
+    Start with a fresh browser context to capture the authentication state:
+    ```python
+    browser = playwright.chromium.launch(headless=False)
+    context = browser.new_context()
+    page = context.new_page()
+    ```
+  </Step>
+  
+  <Step title="Perform login">
+    Navigate through the authentication flow:
+    ```python
+    page.goto("https://accounts.google.com")
+    email_input = page.get_by_label("Email or phone")
+    email_input.fill("your-email@example.com")
+    page.get_by_role("button", name="Next").click()
+    ```
+  </Step>
+  
+  <Step title="Handle 2FA if needed">
+    Use `page.pause()` to manually complete two-factor authentication:
+    ```python
+    page.pause()
+    ```
+  </Step>
+  
+  <Step title="Save storage state">
+    Save the authenticated session to a file:
+    ```python
+    context.storage_state(path="playwright/.auth/storage_state.json")
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+Make sure to create the directory `playwright/.auth/` before saving the storage state, otherwise you'll get a file not found error.
+</Warning>
+
+## Loading Authentication State
+
+Once saved, you can load the authentication state in your tests:
+
+<Tabs>
+  <Tab title="Sync API">
+    ```python
+    from playwright.sync_api import sync_playwright
+    
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        
+        # Load authentication state
+        context = browser.new_context(
+            storage_state="playwright/.auth/storage_state.json"
+        )
+        
+        page = context.new_page()
+        page.goto("https://accounts.google.com")
+        
+        # You're already logged in!
+        page.screenshot(path="account.jpg")
+        
+        browser.close()
+    ```
+  </Tab>
+  
+  <Tab title="pytest">
+    ```python
+    import pytest
+    from playwright.sync_api import Page
+    
+    @pytest.fixture(scope="session")
+    def browser_context_args(browser_context_args):
+        return {
+            **browser_context_args,
+            "storage_state": "playwright/.auth/storage_state.json",
+        }
+    
+    def test_authenticated_page(page: Page):
+        page.goto("https://accounts.google.com")
+        # Already authenticated!
+        page.screenshot(path="account.jpg")
+    ```
+  </Tab>
+</Tabs>
+
+## Browser Arguments for Authentication
+
+Some sites require specific browser arguments to work correctly:
+
+```python
+# Disable automation detection
+browser = playwright.chromium.launch(
+    headless=False,
+    args=[
+        '--disable-blink-features=AutomationControlled'
+    ]
+)
+```
+
+<CodeGroup>
+```python Basic Launch
+browser = playwright.chromium.launch(
+    headless=False,
+    slow_mo=500
+)
+```
+
+```python With Arguments
+browser = playwright.chromium.launch(
+    headless=False,
+    args=[
+        '--disable-blink-features=AutomationControlled',
+        '--no-sandbox',
+        '--disable-setuid-sandbox'
+    ]
+)
+```
+</CodeGroup>
+
+## Authentication in pytest
+
+When using pytest, you can configure authentication at the session level to share state across all tests:
+
+```python
+import pytest
+from playwright.sync_api import Page, expect
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    return {
+        **browser_type_launch_args,
+        "headless": False,
+        "slow_mo": 500,
+    }
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    return {
+        **browser_context_args,
+        "storage_state": "playwright/.auth/storage_state.json",
+    }
+
+def test_page_has_docs_link(page: Page):
+    page.goto("http://playwright.dev/python")
+    docs_link = page.get_by_role("link", name="Docs")
+    expect(docs_link).to_be_visible()
+
+def test_visits_google_account(page: Page):
+    page.goto("https://accounts.google.com")
+    page.screenshot(path="account.jpg")
+```
+
+<Note>
+Using `scope="session"` means the authentication state is loaded once and shared across all tests in the session.
+</Note>
+
+## Authentication Patterns
+
+<CardGroup cols={2}>
+  <Card title="Setup Script" icon="key">
+    Create a separate script to authenticate and save state:
+    ```python
+    # auth_setup.py
+    def setup_authentication():
+        # Perform login
+        # Save storage state
+        pass
+    ```
+  </Card>
+  
+  <Card title="Global Setup" icon="globe">
+    Use pytest's global setup to authenticate before tests:
+    ```python
+    # conftest.py
+    @pytest.fixture(scope="session", autouse=True)
+    def setup_auth():
+        # Setup authentication once
+        pass
+    ```
+  </Card>
+  
+  <Card title="Per-Test Auth" icon="user">
+    Authenticate for specific tests that need it:
+    ```python
+    @pytest.fixture
+    def authenticated_page(page):
+        # Login for this test
+        return page
+    ```
+  </Card>
+  
+  <Card title="Multiple Accounts" icon="users">
+    Manage multiple authentication states:
+    ```python
+    # Save different states
+    # admin_state.json
+    # user_state.json
+    ```
+  </Card>
+</CardGroup>
+
+## Storage State Structure
+
+The storage state JSON contains cookies and storage data:
+
+```json
+{
+  "cookies": [
+    {
+      "name": "session_id",
+      "value": "abc123",
+      "domain": ".example.com",
+      "path": "/",
+      "expires": 1234567890,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://example.com",
+      "localStorage": [
+        {
+          "name": "user_preferences",
+          "value": "{\"theme\":\"dark\"}"
+        }
+      ]
+    }
+  ]
+}
+```
+
+<ParamField path="cookies" type="array">
+  Array of cookie objects stored during authentication
+</ParamField>
+
+<ParamField path="origins" type="array">
+  Array of origin objects with localStorage and sessionStorage data
+</ParamField>
+
+## Best Practices
+
+<Steps>
+  <Step title="Secure credential storage">
+    Never commit credentials to version control. Use environment variables:
+    ```python
+    import os
+    email = os.getenv("TEST_EMAIL")
+    password = os.getenv("TEST_PASSWORD")
+    ```
+  </Step>
+  
+  <Step title="Separate auth setup">
+    Create a dedicated script for authentication setup, separate from tests.
+  </Step>
+  
+  <Step title="Handle token expiration">
+    Implement logic to refresh authentication when tokens expire:
+    ```python
+    if not is_authenticated(page):
+        refresh_authentication()
+    ```
+  </Step>
+  
+  <Step title="Use different states for different roles">
+    Save separate storage states for admin, user, and other roles.
+  </Step>
+</Steps>
+
+## Security Considerations
+
+<Warning>
+**Important Security Notes:**
+- Never commit `storage_state.json` to version control
+- Add `playwright/.auth/` to `.gitignore`
+- Use environment variables for credentials
+- Rotate test credentials regularly
+- Use separate test accounts, not production accounts
+</Warning>
+
+```bash
+# .gitignore
+playwright/.auth/
+*.json
+```
+
+## Troubleshooting
+
+<Tabs>
+  <Tab title="State not loading">
+    **Problem**: Authentication state doesn't persist
+    
+    **Solution**:
+    - Verify the storage state file exists
+    - Check file path is correct
+    - Ensure cookies haven't expired
+    - Verify domain matches between save and load
+  </Tab>
+  
+  <Tab title="Two-factor auth">
+    **Problem**: Can't automate 2FA
+    
+    **Solution**:
+    - Use `page.pause()` to manually complete 2FA during setup
+    - Save state after manual 2FA completion
+    - Consider using test accounts with 2FA disabled
+    - Use backup codes for automation
+  </Tab>
+  
+  <Tab title="Session expires">
+    **Problem**: Session expires during test run
+    
+    **Solution**:
+    - Regenerate storage state before test runs
+    - Implement session refresh logic
+    - Use longer-lived test tokens
+    - Monitor session validity
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="pytest Basics" href="/concepts/pytest-basics">
+    Learn how to structure tests with pytest
+  </Card>
+  
+  <Card title="Fixtures" href="/concepts/fixtures">
+    Use fixtures to manage test setup and teardown
+  </Card>
+</CardGroup>

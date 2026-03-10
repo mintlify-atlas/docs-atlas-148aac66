@@ -1,0 +1,251 @@
+---
+title: 'Locators'
+description: 'Learn how to locate elements on web pages using Playwright Python'
+---
+
+# Locators
+
+Locators are the foundation of Playwright automation. They represent a way to find elements on the page and perform actions or assertions on them. Playwright's locators are **auto-waiting** and **auto-retrying**, making your tests more reliable.
+
+## Why Locators?
+
+Locators provide several key benefits:
+
+- **Auto-waiting**: Locators wait for elements to be actionable before performing actions
+- **Auto-retrying**: Actions are retried until they succeed or timeout
+- **Resilience**: Tests are more reliable with built-in waiting and retry logic
+- **Strict mode**: Ensures only one element matches your locator
+
+<Note>
+Playwright recommends using user-facing locators like `get_by_role()` and `get_by_label()` as they are more resilient to changes in the DOM structure.
+</Note>
+
+## User-Facing Locators
+
+These locators reflect how users interact with your page, making tests more resilient.
+
+### By Role
+
+Locate elements by their ARIA role, ARIA attributes, and accessible name.
+
+```python
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as playwright:
+    browser = playwright.chromium.launch(headless=False)
+    page = browser.new_page()
+    page.goto("https://playwright.dev/python")
+    
+    # Locate a link element with "Docs" text
+    docs_button = page.get_by_role('link', name="Docs")
+    docs_button.click()
+    
+    browser.close()
+```
+
+<Tabs>
+  <Tab title="By Role">
+    ```python
+    # Locate button by role and name
+    button = page.get_by_role("button", name="Button with Dynamic ID")
+    button.click()
+    
+    # Works even when ID changes dynamically
+    page.goto("http://uitestingplayground.com/dynamicid")
+    button = page.get_by_role("button", name="Button with Dynamic ID")
+    expect(button).to_be_visible()
+    ```
+  </Tab>
+  <Tab title="By Label">
+    ```python
+    # Locate input by its label
+    input = page.get_by_label("Set New Button Name")
+    input.fill("great stuff")
+    
+    # Works with form elements
+    email_input = page.get_by_label("Email or phone")
+    email_input.fill("user@example.com")
+    ```
+  </Tab>
+  <Tab title="By Placeholder">
+    ```python
+    # Locate input by placeholder text
+    search_input = page.get_by_placeholder("Search docs")
+    search_input.fill("assertions")
+    ```
+  </Tab>
+</Tabs>
+
+### By Text
+
+Locate elements containing specific text.
+
+```python
+# Find element containing exact text
+link = page.get_by_text("GET STARTED")
+link.click()
+
+# Find element with partial text match
+link = page.get_by_text("GET STARTED", exact=False)
+```
+
+## CSS and XPath Locators
+
+For cases where user-facing locators aren't sufficient, you can use CSS selectors or XPath.
+
+<CodeGroup>
+```python CSS Selector
+# Locate by CSS class
+primary_btn = page.locator("button.btn-primary")
+primary_btn.click()
+
+# Locate by CSS selector
+input = page.locator("input[name='email']")
+input.fill("test@example.com")
+
+# Complex CSS selector
+first_item = page.locator("td.film-title").first
+first_item.wait_for()
+```
+
+```python XPath
+# Locate by XPath
+primary_btn = page.locator("//button[ contains(@class, 'btn-primary') ]")
+primary_btn.click()
+
+# XPath with text
+heading = page.locator("//h1[text()='Welcome']")
+```
+</CodeGroup>
+
+<Warning>
+CSS and XPath selectors are more brittle than user-facing locators. They break when the DOM structure changes. Use them only when necessary.
+</Warning>
+
+## Locator Filtering
+
+Refine locators to target specific elements more precisely.
+
+### First, Last, and Nth
+
+```python
+# Get the first matching element
+first_link = page.locator("a").first
+
+# Get the last matching element
+last_link = page.locator("a").last
+
+# Get nth element (0-indexed)
+second_link = page.locator("a").nth(1)
+```
+
+### Filtering by Text
+
+```python
+# Filter locator by text content
+link = page.get_by_role("link").filter(has_text="Documentation")
+
+# Filter with regex
+import re
+link = page.locator("a").filter(has_text=re.compile(r"docs", re.IGNORECASE))
+```
+
+### Chaining Locators
+
+```python
+# Find element within another element
+container = page.locator("div.container")
+button = container.get_by_role("button", name="Submit")
+button.click()
+
+# Multiple levels of nesting
+menu = page.locator("nav")
+dropdown = menu.locator("ul.dropdown__menu")
+option = dropdown.get_by_text("Python")
+```
+
+## Common Locator Patterns
+
+<Steps>
+  <Step title="Locate the element">
+    Use the most appropriate locator strategy for your element:
+    ```python
+    button = page.get_by_role("button", name="Submit")
+    ```
+  </Step>
+  
+  <Step title="Perform an action">
+    Actions wait for the element to be actionable:
+    ```python
+    button.click()
+    ```
+  </Step>
+  
+  <Step title="Make assertions">
+    Verify the element state or content:
+    ```python
+    from playwright.sync_api import expect
+    expect(button).to_be_visible()
+    ```
+  </Step>
+</Steps>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Prefer User-Facing Locators" icon="user">
+    Use `get_by_role()`, `get_by_label()`, and `get_by_text()` whenever possible. They're more resilient to changes.
+  </Card>
+  
+  <Card title="Use Specific Selectors" icon="crosshairs">
+    Make your locators as specific as possible to avoid matching multiple elements.
+  </Card>
+  
+  <Card title="Avoid Brittle Selectors" icon="triangle-exclamation">
+    Don't rely on implementation details like CSS classes that might change frequently.
+  </Card>
+  
+  <Card title="Test Your Locators" icon="flask">
+    Use Playwright Inspector to test and debug your locators interactively.
+  </Card>
+</CardGroup>
+
+## Locator Actions
+
+All common actions can be performed on locators:
+
+```python
+# Click
+button.click()
+
+# Fill input
+input.fill("text value")
+
+# Type with delay
+input.type("slow typing", delay=100)
+
+# Check/uncheck
+checkbox.check()
+checkbox.uncheck()
+
+# Select option
+select.select_option("value")
+
+# Hover
+element.hover()
+
+# Focus
+input.focus()
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Web-First Assertions" href="/concepts/web-first-assertions">
+    Learn how to make assertions on locators
+  </Card>
+  
+  <Card title="Events" href="/concepts/events">
+    Handle page events and wait for specific conditions
+  </Card>
+</CardGroup>

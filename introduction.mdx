@@ -1,0 +1,151 @@
+---
+title: 'Introduction to Playwright'
+description: 'Learn what Playwright is and why it is the modern choice for end-to-end testing in Python'
+---
+
+## What is Playwright?
+
+Playwright is a powerful, open-source automation framework developed by Microsoft that enables reliable end-to-end testing for modern web applications. It provides a single API to automate Chromium, Firefox, and WebKit browsers with a single automation API.
+
+<CardGroup cols={2}>
+  <Card title="Cross-Browser Testing" icon="browser">
+    Test across Chromium, Firefox, and WebKit with a single API
+  </Card>
+  <Card title="Auto-Wait" icon="clock">
+    Playwright automatically waits for elements to be ready before performing actions
+  </Card>
+  <Card title="Powerful Assertions" icon="check">
+    Web-first assertions that automatically retry until conditions are met
+  </Card>
+  <Card title="Python Native" icon="python">
+    First-class Python support with both sync and async APIs
+  </Card>
+</CardGroup>
+
+## Why Choose Playwright for Testing?
+
+### Reliable and Fast
+
+Playwright eliminates flaky tests with auto-waiting and web-first assertions. It waits for elements to be actionable before performing actions, reducing the need for arbitrary timeouts.
+
+```python
+# Playwright automatically waits for the element to be ready
+page.get_by_role('link', name="Docs").click()
+
+# No need for manual waits or sleeps
+```
+
+### Cross-Browser Support
+
+Test your application across all major browser engines:
+
+- **Chromium** - Chrome, Edge, and other Chromium-based browsers
+- **Firefox** - Mozilla Firefox
+- **WebKit** - Safari
+
+```python
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as playwright:
+    # Launch any browser
+    browser = playwright.chromium.launch()
+    # browser = playwright.firefox.launch()
+    # browser = playwright.webkit.launch()
+```
+
+### Modern Locator Strategy
+
+Playwright encourages using user-facing attributes to select elements, making tests more resilient to changes:
+
+```python
+# Locate by role and accessible name
+page.get_by_role('link', name="GET STARTED")
+
+# Locate by text content
+page.get_by_text("Welcome")
+
+# Locate by label
+page.get_by_label("Email address")
+```
+
+<Note>
+  Playwright's locator strategy focuses on how users interact with your application, making tests more maintainable and less brittle than CSS or XPath selectors.
+</Note>
+
+### Powerful Debugging Tools
+
+Playwright comes with built-in debugging capabilities:
+
+- **Headed mode** - See the browser as tests run
+- **Slow motion** - Slow down execution to observe actions
+- **Screenshots and videos** - Capture visual evidence of test runs
+- **Trace viewer** - Step-by-step visual debugging
+
+```python
+# Run in headed mode with slow motion
+browser = playwright.chromium.launch(headless=False, slow_mo=500)
+```
+
+## Playwright vs Selenium
+
+| Feature | Playwright | Selenium |
+|---------|-----------|----------|
+| Auto-waiting | Built-in | Manual |
+| Browser installation | Automated | Manual |
+| Network interception | Yes | Limited |
+| Multiple browsers in parallel | Yes | Requires Grid |
+| Web-first assertions | Yes | No |
+| Trace viewer | Yes | No |
+
+## Use Cases
+
+Playwright is perfect for:
+
+- **End-to-end testing** - Test complete user workflows
+- **Integration testing** - Verify components work together
+- **Visual regression testing** - Catch visual changes
+- **API testing** - Test backend APIs alongside UI
+- **Web scraping** - Automate data extraction from websites
+
+<Warning>
+  While Playwright can be used for web scraping, always respect website terms of service and robots.txt files.
+</Warning>
+
+## Pytest Integration
+
+Playwright integrates seamlessly with pytest, Python's most popular testing framework:
+
+```python
+from playwright.sync_api import Page
+
+def test_homepage(page: Page):
+    page.goto("https://playwright.dev/python")
+    assert page.url == "https://playwright.dev/python"
+```
+
+The `pytest-playwright` plugin provides:
+
+- Automatic browser lifecycle management
+- Built-in fixtures for pages and contexts
+- Parallel test execution
+- Automatic screenshot capture on failure
+- Video recording capabilities
+
+## Next Steps
+
+Ready to get started? Follow our guides to:
+
+<CardGroup cols={2}>
+  <Card title="Install Playwright" icon="download" href="/installation">
+    Set up Python, pip, and Playwright in minutes
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Run your first Playwright script
+  </Card>
+  <Card title="Write Your First Test" icon="flask" href="/first-test">
+    Create a complete test with pytest
+  </Card>
+  <Card title="Playwright Documentation" icon="book" href="https://playwright.dev/python">
+    Explore the official Playwright Python docs
+  </Card>
+</CardGroup>

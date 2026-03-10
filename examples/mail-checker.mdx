@@ -1,0 +1,354 @@
+---
+title: 'Automated Mail Checker'
+description: 'Build an automated email checker with Playwright to monitor new Gmail messages'
+icon: 'envelope'
+---
+
+## Overview
+
+This example demonstrates how to build an automated Gmail checker that scans for unread emails and displays sender and subject information. It showcases Playwright's ability to interact with complex web applications, handle authentication state, and process multiple elements.
+
+## What You'll Learn
+
+<CardGroup cols={2}>
+  <Card title="Session Management" icon="key">
+    Reuse authenticated browser sessions with storage state
+  </Card>
+  <Card title="Element Iteration" icon="list">
+    Loop through multiple elements and extract data
+  </Card>
+  <Card title="Conditional Logic" icon="filter">
+    Filter elements based on specific attributes
+  </Card>
+  <Card title="Data Extraction" icon="database">
+    Extract and structure data from web pages
+  </Card>
+</CardGroup>
+
+## Complete Implementation
+
+<Steps>
+  <Step title="Setup and Authentication">
+    Load a saved authentication state to bypass manual login. This requires a pre-saved `storage_state.json` file from a previous authenticated session.
+    
+    ```python
+    from playwright.sync_api import sync_playwright
+
+
+    with sync_playwright() as playwright:
+        browser = playwright.firefox.launch()
+        context = browser.new_context(
+            storage_state="path/to/storage_state.json"
+        )
+        page = context.new_page()
+        page.goto("https://gmail.com")
+    ```
+    
+    <Note>
+    **Storage State Authentication**
+    
+    The `storage_state` parameter loads cookies, local storage, and session storage from a previous session. This allows you to skip the login process and start with an authenticated session.
+    
+    To create a storage state file:
+    ```python
+    # After manual login
+    context.storage_state(path="path/to/storage_state.json")
+    ```
+    </Note>
+  </Step>
+  
+  <Step title="Locate Email Elements">
+    Find all email rows in the inbox using the Gmail DOM structure.
+    
+    ```python
+    new_emails = []
+    emails = page.locator("div.UI table tr")
+    ```
+    
+    This locator targets table rows within Gmail's email list container.
+  </Step>
+  
+  <Step title="Iterate and Filter Emails">
+    Loop through all emails and identify which ones are unread by checking for the "Mark as read" button.
+    
+    ```python
+    for email in emails.all():
+        is_new_email = email.locator(
+            "td li[data-tooltip='Mark as read']"
+        ).count() == 1
+
+        if is_new_email:
+            sender = email.locator("td span[email]:visible").inner_text()
+            title = email.locator("td span[data-thread-id]:visible").inner_text()
+
+            new_emails.append(
+                [sender, title]
+            )
+    ```
+    
+    **Key Techniques:**
+    - `emails.all()` returns a list of all matching elements
+    - `.count()` checks if an element exists (unread emails have "Mark as read" button)
+    - `:visible` pseudo-selector ensures we only get visible elements
+    - `inner_text()` extracts the text content
+  </Step>
+  
+  <Step title="Display Results">
+    Print the results in a formatted way.
+    
+    ```python
+    if len(new_emails) == 0:
+        print("No new emails 📫!")
+    else:
+        print(f"{len(new_emails)} new email\s 📩!")
+        print("-"*30)
+
+        for new_email in new_emails:
+            print(new_email[0]+":", new_email[1])
+            print("-"*30)
+
+    
+    context.close()
+    ```
+  </Step>
+</Steps>
+
+## Full Source Code
+
+```python
+from playwright.sync_api import sync_playwright
+
+
+with sync_playwright() as playwright:
+    browser = playwright.firefox.launch()
+    context = browser.new_context(
+        storage_state="path/to/storage_state.json"
+    )
+    page = context.new_page()
+    page.goto("https://gmail.com")
+
+    new_emails = []
+    emails = page.locator("div.UI table tr")
+
+    for email in emails.all():
+        is_new_email = email.locator(
+            "td li[data-tooltip='Mark as read']"
+        ).count() == 1
+
+        if is_new_email:
+            sender = email.locator("td span[email]:visible").inner_text()
+            title = email.locator("td span[data-thread-id]:visible").inner_text()
+
+            new_emails.append(
+                [sender, title]
+            )
+
+    if len(new_emails) == 0:
+        print("No new emails 📫!")
+    else:
+        print(f"{len(new_emails)} new email\s 📩!")
+        print("-"*30)
+
+        for new_email in new_emails:
+            print(new_email[0]+":", new_email[1])
+            print("-"*30)
+
+    
+    context.close()
+```
+
+## Key Concepts
+
+### Storage State for Authentication
+
+<CodeGroup>
+```python Save Storage State
+# Login manually first, then save state
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.firefox.launch(headless=False)
+    context = browser.new_context()
+    page = context.new_page()
+    
+    # Navigate and login manually
+    page.goto("https://gmail.com")
+    # ... perform login steps ...
+    
+    # Save authenticated state
+    context.storage_state(path="gmail_auth.json")
+    
+    browser.close()
+```
+
+```python Load Storage State
+# Use saved state in subsequent runs
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.firefox.launch()
+    context = browser.new_context(
+        storage_state="gmail_auth.json"
+    )
+    page = context.new_page()
+    page.goto("https://gmail.com")  # Already logged in!
+```
+</CodeGroup>
+
+### Element Iteration Patterns
+
+```python
+# Get all matching elements
+emails = page.locator("div.UI table tr")
+
+# Method 1: Iterate with .all()
+for email in emails.all():
+    # Process each email
+    text = email.inner_text()
+
+# Method 2: Access by index
+for i in range(emails.count()):
+    email = emails.nth(i)
+    text = email.inner_text()
+
+# Method 3: Filter then iterate
+unread_emails = emails.filter(has=page.locator("[data-tooltip='Mark as read']"))
+for email in unread_emails.all():
+    # Process only unread emails
+    pass
+```
+
+### Conditional Element Checking
+
+```python
+# Check if element exists
+has_mark_as_read = email.locator("[data-tooltip='Mark as read']").count() == 1
+
+# Alternative: Use is_visible()
+if email.locator("[data-tooltip='Mark as read']").is_visible():
+    # Element exists and is visible
+    pass
+
+# Check for multiple conditions
+is_unread = (
+    email.locator(".unread-marker").count() > 0 and
+    email.locator(".starred").count() == 0
+)
+```
+
+## Running the Script
+
+<CodeGroup>
+```bash Basic Execution
+python check_mail.py
+```
+
+```bash With Headed Browser
+# Modify the script to add headless=False
+browser = playwright.firefox.launch(headless=False)
+```
+
+```bash Scheduled Execution (Linux/Mac)
+# Add to crontab to check every 5 minutes
+*/5 * * * * cd /path/to/script && python check_mail.py
+```
+</CodeGroup>
+
+## Practical Enhancements
+
+<CardGroup cols={2}>
+  <Card title="Email Notifications" icon="bell">
+    Send desktop notifications when new emails arrive using libraries like `plyer` or `notify-py`.
+  </Card>
+  
+  <Card title="Filter by Sender" icon="user">
+    Add logic to only alert for emails from specific senders or with certain keywords.
+  </Card>
+  
+  <Card title="Database Storage" icon="database">
+    Store email metadata in SQLite or PostgreSQL for historical tracking.
+  </Card>
+  
+  <Card title="Multi-Account Support" icon="users">
+    Load multiple storage states to check different email accounts.
+  </Card>
+</CardGroup>
+
+## Example Enhancements
+
+### Filter by Sender
+
+```python
+IMPORTANT_SENDERS = ["boss@company.com", "client@important.com"]
+
+for email in emails.all():
+    is_new_email = email.locator("[data-tooltip='Mark as read']").count() == 1
+    
+    if is_new_email:
+        sender = email.locator("td span[email]:visible").inner_text()
+        
+        # Only process important senders
+        if sender in IMPORTANT_SENDERS:
+            title = email.locator("td span[data-thread-id]:visible").inner_text()
+            # Send notification
+            send_notification(sender, title)
+```
+
+### Send Desktop Notification
+
+```python
+from plyer import notification
+
+def send_notification(sender, subject):
+    notification.notify(
+        title=f"New Email from {sender}",
+        message=subject,
+        app_name="Gmail Checker",
+        timeout=10
+    )
+
+# In your main loop
+if is_new_email:
+    sender = email.locator("td span[email]:visible").inner_text()
+    title = email.locator("td span[data-thread-id]:visible").inner_text()
+    send_notification(sender, title)
+```
+
+## Important Considerations
+
+<Warning>
+**Security Best Practices:**
+
+1. **Never commit storage_state.json** - Add it to `.gitignore`
+2. **Encrypt storage state files** - Contains sensitive authentication data
+3. **Rotate storage states regularly** - Generate new states periodically
+4. **Use environment variables** - Store file paths in environment variables
+5. **Consider OAuth alternatives** - For production apps, use Gmail API with OAuth
+</Warning>
+
+<Note>
+**Gmail DOM Stability:**
+
+Gmail's DOM structure can change with UI updates. The selectors used in this example (like `div.UI table tr`) may need adjustment if Gmail updates its interface. For production use, consider:
+
+- Using Gmail API instead of web scraping
+- Regular maintenance and selector updates
+- Error handling for missing elements
+- Alternative selectors as fallbacks
+</Note>
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Storage state expired | Regenerate storage_state.json by logging in again |
+| Emails not detected | Verify Gmail DOM structure hasn't changed using inspector |
+| Authentication fails | Check Firefox profile compatibility or try Chrome |
+| Missing emails | Ensure emails are in the primary inbox, not other tabs |
+
+## Additional Resources
+
+- [Playwright Authentication Guide](https://playwright.dev/python/docs/auth)
+- [Storage State Documentation](https://playwright.dev/python/docs/api/class-browsercontext#browser-context-storage-state)
+- [Gmail API Alternative](https://developers.google.com/gmail/api)
+- [Element Iteration Patterns](https://playwright.dev/python/docs/locators#lists)

@@ -1,80 +1,271 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: 'Quick Start'
+description: 'Get from zero to running your first Playwright script in minutes'
 ---
 
-## Get started in three steps
+## Your First Playwright Script
 
-Get your documentation site running locally and make your first customization.
+Let's create a simple script that opens a browser, navigates to the Playwright website, clicks a link, and prints the resulting URL.
 
-### Step 1: Set up your local environment
+<Steps>
+  <Step title="Create a Python File">
+    Create a new file called `app.py` in your project directory:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    touch app.py
+    ```
+  </Step>
 
-### Step 2: Deploy your changes
+  <Step title="Write the Automation Script">
+    Open `app.py` and add the following code:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```python app.py
+    from playwright.sync_api import sync_playwright
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    with sync_playwright() as playwright:
+        # Launch a browser
+        browser = playwright.chromium.launch(headless=False, slow_mo=500)
+        # Create a new page
+        page = browser.new_page()
+        # Visit the playwright website
+        page.goto("https://playwright.dev/python")
 
-### Step 3: Go live
+        # Locate a link element with "Docs" text
+        docs_button = page.get_by_role('link', name="Docs")
+        docs_button.click()
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+        # Get the url
+        print("Docs:", page.url)
 
-## Next steps
+        browser.close()
+    ```
 
-Now that you have your docs running, explore these key features:
+    <Note>
+      We're using `headless=False` to see the browser in action, and `slow_mo=500` to slow down operations by 500ms so you can observe what's happening.
+    </Note>
+  </Step>
 
-<CardGroup cols={2}>
+  <Step title="Run the Script">
+    Execute your script:
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+    ```bash
+    python app.py
+    ```
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+    You should see:
+    1. A Chromium browser window opens
+    2. The browser navigates to the Playwright Python homepage
+    3. The "Docs" link is clicked
+    4. The terminal prints the resulting URL
+    5. The browser closes
+  </Step>
+</Steps>
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+## Understanding the Code
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+Let's break down what each part does:
 
-</CardGroup>
+### Context Manager
+
+```python
+with sync_playwright() as playwright:
+```
+
+The `sync_playwright()` context manager initializes the Playwright environment. It automatically handles setup and cleanup.
+
+<Tip>
+  Using a context manager (`with` statement) ensures resources are properly cleaned up, even if an error occurs.
+</Tip>
+
+### Browser Launch
+
+```python
+browser = playwright.chromium.launch(headless=False, slow_mo=500)
+```
+
+- `playwright.chromium` - Launches Chromium (you can also use `firefox` or `webkit`)
+- `headless=False` - Shows the browser window (set to `True` for headless mode)
+- `slow_mo=500` - Adds 500ms delay between operations for visibility
+
+### Create a Page
+
+```python
+page = browser.new_page()
+```
+
+Creates a new browser tab/page where actions will be performed.
+
+### Navigate
+
+```python
+page.goto("https://playwright.dev/python")
+```
+
+Navigates to the specified URL. Playwright automatically waits for the page to load.
+
+### Locate and Interact
+
+```python
+docs_button = page.get_by_role('link', name="Docs")
+docs_button.click()
+```
+
+- `get_by_role('link', name="Docs")` - Finds a link element with accessible name "Docs"
+- `click()` - Clicks the element (waits for it to be clickable first)
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  Playwright automatically waits for elements to be ready before performing actions. No manual waits needed!
 </Note>
+
+### Get Information
+
+```python
+print("Docs:", page.url)
+```
+
+Retrieves and prints the current page URL after navigation.
+
+## Trying Different Browsers
+
+Playwright supports multiple browser engines. Try running your script with different browsers:
+
+<CodeGroup>
+```python Chromium
+browser = playwright.chromium.launch(headless=False, slow_mo=500)
+```
+
+```python Firefox
+browser = playwright.firefox.launch(headless=False, slow_mo=500)
+```
+
+```python WebKit (Safari)
+browser = playwright.webkit.launch(headless=False, slow_mo=500)
+```
+</CodeGroup>
+
+## Running in Headless Mode
+
+For production or CI/CD environments, run in headless mode (no visible browser):
+
+```python
+browser = playwright.chromium.launch(headless=True)
+```
+
+Or simply omit the parameter (headless is the default):
+
+```python
+browser = playwright.chromium.launch()
+```
+
+## Common Operations
+
+Here are some common operations you can perform:
+
+### Typing Text
+
+```python
+page.get_by_label("Email").fill("user@example.com")
+```
+
+### Selecting Options
+
+```python
+page.get_by_label("Country").select_option("United States")
+```
+
+### Checking Checkboxes
+
+```python
+page.get_by_label("I agree to terms").check()
+```
+
+### Taking Screenshots
+
+```python
+page.screenshot(path="screenshot.png")
+```
+
+### Waiting for Elements
+
+```python
+page.wait_for_selector("text=Welcome")
+```
+
+<Tip>
+  Most Playwright actions have built-in auto-waiting, so explicit waits are rarely needed.
+</Tip>
+
+## Enhanced Example
+
+Here's a more complete example that demonstrates multiple interactions:
+
+```python enhanced_app.py
+from playwright.sync_api import sync_playwright
+
+
+with sync_playwright() as playwright:
+    browser = playwright.chromium.launch(headless=False, slow_mo=500)
+    page = browser.new_page()
+    
+    # Navigate to the Playwright Python homepage
+    page.goto("https://playwright.dev/python")
+    print(f"Page title: {page.title()}")
+    
+    # Click the "GET STARTED" link
+    get_started = page.get_by_role('link', name="GET STARTED")
+    get_started.click()
+    
+    print(f"Navigated to: {page.url}")
+    
+    # Take a screenshot
+    page.screenshot(path="getting-started.png")
+    print("Screenshot saved as getting-started.png")
+    
+    browser.close()
+```
+
+## Troubleshooting
+
+### Browser Not Launching
+
+If the browser doesn't launch, ensure browsers are installed:
+
+```bash
+playwright install
+```
+
+### Element Not Found
+
+If an element isn't found, the page might still be loading. Playwright usually handles this automatically, but you can add explicit waits:
+
+```python
+page.wait_for_load_state("networkidle")
+```
+
+### Timeout Errors
+
+Increase the default timeout if needed:
+
+```python
+page.set_default_timeout(60000)  # 60 seconds
+```
+
+## Next Steps
+
+Now that you've run your first Playwright script, you're ready to write proper tests!
+
+<CardGroup cols={2}>
+  <Card title="Write Your First Test" icon="flask" href="/first-test">
+    Learn how to write tests with pytest and pytest-playwright
+  </Card>
+  <Card title="Locators Guide" icon="crosshairs" href="/concepts/locators">
+    Master Playwright's powerful locator strategies
+  </Card>
+  <Card title="Events & Waits" icon="clock" href="/concepts/events">
+    Understand how Playwright handles events and waiting
+  </Card>
+  <Card title="Assertions" icon="check" href="/concepts/web-first-assertions">
+    Learn web-first assertions for robust testing
+  </Card>
+</CardGroup>

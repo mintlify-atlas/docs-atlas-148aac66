@@ -1,122 +1,118 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Playwright Python and Pytest for Web Automation Testing",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#2D8A39",
+    "light": "#45A655",
+    "dark": "#1E5F28"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/darket1989/Playwright-Python-and-Pytest-for-Web-Automation-Testing"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/darket1989/Playwright-Python-and-Pytest-for-Web-Automation-Testing"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Getting Started",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Introduction",
+            "pages": ["introduction", "installation"]
+          },
+          {
+            "group": "Quick Start",
+            "pages": ["quickstart", "first-test"]
+          }
+        ]
+      },
+      {
+        "tab": "Core Concepts",
+        "groups": [
+          {
+            "group": "Fundamentals",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "concepts/locators",
+              "concepts/events",
+              "concepts/authentication"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Pytest Integration",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/pytest-basics",
+              "concepts/pytest-playwright-plugin",
+              "concepts/fixtures"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Assertions",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "concepts/web-first-assertions"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Guides",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Testing Patterns",
             "pages": [
-              "api-reference/introduction"
+              "guides/page-object-model",
+              "guides/data-driven-testing",
+              "guides/bdd"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Advanced Features",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "guides/video-recording",
+              "guides/trace-viewer",
+              "guides/api-testing"
+            ]
+          },
+          {
+            "group": "Best Practices",
+            "pages": [
+              "guides/optimization",
+              "guides/tips-and-tricks"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Examples",
+        "groups": [
+          {
+            "group": "Practice Projects",
+            "pages": [
+              "examples/ui-testing-playground",
+              "examples/mail-checker",
+              "examples/github-api"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "CI/CD",
+        "groups": [
+          {
+            "group": "Continuous Integration",
+            "pages": [
+              "ci/github-actions",
+              "ci/best-practices"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

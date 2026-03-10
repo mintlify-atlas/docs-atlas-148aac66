@@ -1,0 +1,664 @@
+---
+title: 'Web-First Assertions'
+description: 'Learn how to write reliable assertions with auto-waiting and auto-retrying in Playwright Python'
+---
+
+# Web-First Assertions
+
+Web-first assertions are Playwright's approach to testing that handles the dynamic nature of modern web applications. Unlike traditional assertions that fail immediately, web-first assertions automatically wait and retry until the condition is met or a timeout occurs.
+
+## Why Web-First Assertions?
+
+Traditional assertions can be flaky when testing web applications:
+
+```python
+# Traditional assertion - FLAKY!
+button = page.locator("button")
+assert button.is_visible()  # Might fail if button is still loading
+```
+
+Web-first assertions solve this problem:
+
+```python
+from playwright.sync_api import expect
+
+# Web-first assertion - RELIABLE!
+button = page.locator("button")
+expect(button).to_be_visible()  # Waits until button is visible
+```
+
+<Note>
+Web-first assertions automatically wait for conditions to be met, making tests more reliable without explicit waits.
+</Note>
+
+## Basic Usage
+
+Compare traditional assertions with web-first assertions:
+
+<CodeGroup>
+```python Traditional Assertions
+from playwright.sync_api import Page
+
+DOCS_URL = "https://playwright.dev/python/docs/intro"
+
+def test_get_started_link(page: Page):
+    page.goto("https://playwright.dev/python")
+    
+    link = page.get_by_role("link", name="GET STARTED")
+    link.click()
+    
+    # Traditional assertion
+    assert page.url == DOCS_URL
+```
+
+```python Web-First Assertions
+from playwright.sync_api import Page, expect
+
+DOCS_URL = "https://playwright.dev/python/docs/intro"
+
+def test_get_started_link(page: Page):
+    page.goto("https://playwright.dev/python")
+    
+    link = page.get_by_role("link", name="GET STARTED")
+    link.click()
+    
+    # Web-first assertions with auto-waiting
+    expect(page).to_have_url(DOCS_URL)
+    expect(page).to_have_title("Installation | Playwright Python")
+```
+</CodeGroup>
+
+## Page Assertions
+
+Make assertions about the entire page:
+
+```python
+from playwright.sync_api import Page, expect
+
+DOCS_URL = "https://playwright.dev/python/docs/intro"
+
+def test_get_started_link(page: Page):
+    page.goto("https://playwright.dev/python")
+    
+    link = page.get_by_role("link", name="GET STARTED")
+    link.click()
+    
+    # Assert page URL
+    expect(page).to_have_url(DOCS_URL)
+    
+    # Assert page title
+    expect(page).to_have_title("Installation | Playwright Python")
+```
+
+<Tabs>
+  <Tab title="URL Assertions">
+    ```python
+    # Exact URL
+    expect(page).to_have_url("https://example.com")
+    
+    # URL pattern with regex
+    import re
+    expect(page).to_have_url(re.compile(r".*/docs/.*"))
+    
+    # URL contains substring
+    expect(page).to_have_url(re.compile(r"example"))
+    ```
+  </Tab>
+  
+  <Tab title="Title Assertions">
+    ```python
+    # Exact title
+    expect(page).to_have_title("Welcome")
+    
+    # Title pattern
+    import re
+    expect(page).to_have_title(re.compile(r"Welcome.*"))
+    ```
+  </Tab>
+</Tabs>
+
+## Element State Assertions
+
+Assert element visibility and state:
+
+```python
+from playwright.sync_api import Page, expect
+
+def test_element_state(page: Page):
+    page.goto("https://playwright.dev/python")
+    
+    get_started_link = page.get_by_role("link", name="GET STARTED")
+    
+    # Assert element is visible
+    expect(get_started_link).to_be_visible()
+    
+    # Assert element is enabled
+    expect(get_started_link).to_be_enabled()
+    
+    get_python_link = page.get_by_role("link", name="Get Python")
+    
+    # Assert element is hidden
+    expect(get_python_link).to_be_hidden()
+    
+    # Same as not visible
+    expect(get_python_link).not_to_be_visible()
+```
+
+<CardGroup cols={2}>
+  <Card title="Visibility" icon="eye">
+    ```python
+    # Element is visible
+    expect(element).to_be_visible()
+    
+    # Element is hidden
+    expect(element).to_be_hidden()
+    expect(element).not_to_be_visible()
+    ```
+  </Card>
+  
+  <Card title="Interactivity" icon="hand-pointer">
+    ```python
+    # Element is enabled
+    expect(element).to_be_enabled()
+    
+    # Element is disabled
+    expect(element).to_be_disabled()
+    expect(element).not_to_be_enabled()
+    ```
+  </Card>
+  
+  <Card title="Focus" icon="bullseye">
+    ```python
+    # Element has focus
+    expect(element).to_be_focused()
+    
+    # Element doesn't have focus
+    expect(element).not_to_be_focused()
+    ```
+  </Card>
+  
+  <Card title="Attachment" icon="paperclip">
+    ```python
+    # Element is attached to DOM
+    expect(element).to_be_attached()
+    
+    # Element is detached
+    expect(element).not_to_be_attached()
+    ```
+  </Card>
+</CardGroup>
+
+## Text Assertions
+
+Assert element text content:
+
+```python
+from playwright.sync_api import Page, expect
+
+def test_text_content(page: Page):
+    page.goto("https://playwright.dev/python")
+    
+    # Assert element contains text
+    dropdown_menu = page.locator("ul.dropdown__menu")
+    
+    expect(dropdown_menu).to_contain_text("Python")
+    expect(dropdown_menu).to_contain_text("Node.js")
+    expect(dropdown_menu).to_contain_text("Java")
+    expect(dropdown_menu).to_contain_text(".NET")
+    
+    # Assert exact text
+    heading = page.locator("h1.hero__title")
+    
+    expect(heading).to_have_text(
+        "Playwright enables reliable end-to-end testing for modern web apps."
+    )
+```
+
+<Tabs>
+  <Tab title="Contains Text">
+    ```python
+    # Partial match
+    expect(element).to_contain_text("partial")
+    
+    # Multiple substrings
+    expect(element).to_contain_text(["first", "second", "third"])
+    
+    # Regex pattern
+    import re
+    expect(element).to_contain_text(re.compile(r"pattern", re.IGNORECASE))
+    ```
+  </Tab>
+  
+  <Tab title="Exact Text">
+    ```python
+    # Exact match
+    expect(element).to_have_text("exact text")
+    
+    # Multiple exact matches
+    expect(element).to_have_text(["first", "second"])
+    
+    # Regex pattern
+    import re
+    expect(element).to_have_text(re.compile(r"^exact$"))
+    ```
+  </Tab>
+</Tabs>
+
+## Attribute Assertions
+
+Assert element attributes and properties:
+
+```python
+import re
+from playwright.sync_api import Page, expect
+
+def test_attributes(page: Page):
+    page.goto("https://playwright.dev/python")
+    
+    docs_link = page.get_by_role("link", name="Docs")
+    
+    # Assert exact class value
+    expect(docs_link).to_have_class("navbar__item navbar__link")
+    
+    # Assert class contains value
+    expect(docs_link).to_have_class(re.compile(r"navbar__link"))
+    
+    # Assert attribute exists
+    expect(docs_link).to_have_attribute("href")
+    
+    # Assert attribute has specific value
+    expect(docs_link).to_have_attribute("href", "/python/docs/intro")
+```
+
+<Steps>
+  <Step title="Check attribute exists">
+    ```python
+    expect(element).to_have_attribute("data-testid")
+    ```
+  </Step>
+  
+  <Step title="Check attribute value">
+    ```python
+    expect(element).to_have_attribute("href", "/docs")
+    ```
+  </Step>
+  
+  <Step title="Check with regex">
+    ```python
+    import re
+    expect(element).to_have_attribute("class", re.compile(r"btn-.*"))
+    ```
+  </Step>
+</Steps>
+
+<CardGroup cols={2}>
+  <Card title="Class" icon="tag">
+    ```python
+    # Exact class
+    expect(element).to_have_class("btn btn-primary")
+    
+    # Class pattern
+    expect(element).to_have_class(re.compile(r"btn-.*"))
+    ```
+  </Card>
+  
+  <Card title="ID" icon="fingerprint">
+    ```python
+    # Element has specific ID
+    expect(element).to_have_id("submit-button")
+    
+    # ID pattern
+    expect(element).to_have_id(re.compile(r"btn-.*"))
+    ```
+  </Card>
+  
+  <Card title="Attribute" icon="list-check">
+    ```python
+    # Attribute exists
+    expect(element).to_have_attribute("disabled")
+    
+    # Attribute value
+    expect(element).to_have_attribute("type", "submit")
+    ```
+  </Card>
+  
+  <Card title="CSS" icon="paintbrush">
+    ```python
+    # CSS property value
+    expect(element).to_have_css("color", "rgb(255, 0, 0)")
+    
+    # CSS property pattern
+    expect(element).to_have_css("display", re.compile(r"block|flex"))
+    ```
+  </Card>
+</CardGroup>
+
+## Input Assertions
+
+Assert input element states and values:
+
+```python
+from playwright.sync_api import Page, expect
+
+def test_input_state(page: Page):
+    page.goto("https://playwright.dev/python")
+    input = page.get_by_placeholder("Search docs")
+    
+    # Input is hidden initially
+    expect(input).to_be_hidden()
+    
+    # Click search button to show input
+    search_btn = page.get_by_role("button", name="Search")
+    search_btn.press("Control+KeyK")
+    
+    # Input should be visible and editable
+    expect(input).to_be_editable()
+    
+    # Input should be empty initially
+    expect(input).to_be_empty()
+    
+    # Type some query in the input
+    query = "assertions"
+    input.fill(query)
+    
+    # Assert the input value
+    expect(input).to_have_value(query)
+```
+
+<Tabs>
+  <Tab title="Value">
+    ```python
+    # Input has specific value
+    expect(input).to_have_value("text")
+    
+    # Input value pattern
+    import re
+    expect(input).to_have_value(re.compile(r".*@.*"))
+    
+    # Input is empty
+    expect(input).to_be_empty()
+    expect(input).to_have_value("")
+    ```
+  </Tab>
+  
+  <Tab title="State">
+    ```python
+    # Input is editable
+    expect(input).to_be_editable()
+    
+    # Input is readonly
+    expect(input).not_to_be_editable()
+    
+    # Input is disabled
+    expect(input).to_be_disabled()
+    ```
+  </Tab>
+</Tabs>
+
+## Checkbox Assertions
+
+Assert checkbox and radio button states:
+
+```python
+from playwright.sync_api import Page, expect
+
+def test_checkbox(page: Page):
+    page.goto("https://bootswatch.com/default")
+    
+    default_checkbox = page.get_by_label("Default checkbox")
+    checked_checkbox = page.get_by_label("Checked checkbox")
+    
+    # Assert checkbox is checked
+    expect(checked_checkbox).to_be_checked()
+    
+    # Assert checkbox is unchecked
+    expect(default_checkbox).not_to_be_checked()
+```
+
+<CodeGroup>
+```python Checkbox
+# Check the checkbox
+checkbox.check()
+expect(checkbox).to_be_checked()
+
+# Uncheck the checkbox
+checkbox.uncheck()
+expect(checkbox).not_to_be_checked()
+```
+
+```python Radio Button
+# Select radio button
+radio.check()
+expect(radio).to_be_checked()
+
+# Other radio should be unchecked
+expect(other_radio).not_to_be_checked()
+```
+</CodeGroup>
+
+## Select/Dropdown Assertions
+
+Assert select element values:
+
+```python
+from playwright.sync_api import Page, expect
+
+def test_select(page: Page):
+    page.goto("https://bootswatch.com/default")
+    
+    # Single select
+    option_menu = page.get_by_label("Example select")
+    expect(option_menu).to_have_value("1")
+    
+    # Multi-select
+    multi_option_menu = page.get_by_label("Example multiple select")
+    multi_option_menu.select_option(["2", "4"])
+    
+    # Assert multiple selected values
+    expect(multi_option_menu).to_have_values(["2", "4"])
+```
+
+<Tabs>
+  <Tab title="Single Select">
+    ```python
+    # Assert selected value
+    expect(select).to_have_value("option1")
+    
+    # Select and assert
+    select.select_option("option2")
+    expect(select).to_have_value("option2")
+    ```
+  </Tab>
+  
+  <Tab title="Multi-Select">
+    ```python
+    # Assert multiple selected values
+    expect(select).to_have_values(["opt1", "opt2"])
+    
+    # Select multiple and assert
+    select.select_option(["opt3", "opt4"])
+    expect(select).to_have_values(["opt3", "opt4"])
+    ```
+  </Tab>
+</Tabs>
+
+## Count Assertions
+
+Assert the number of matching elements:
+
+```python
+from playwright.sync_api import Page, expect
+
+def test_count(page: Page):
+    page.goto("https://playwright.dev/python")
+    
+    # Assert number of links
+    links = page.locator("a")
+    expect(links).to_have_count(10)
+    
+    # Assert list has items
+    items = page.locator("li.nav-item")
+    expect(items).to_have_count(5)
+```
+
+## Negation
+
+Negate any assertion using `not_`:
+
+```python
+from playwright.sync_api import Page, expect
+
+def test_negation(page: Page):
+    page.goto("https://playwright.dev/python")
+    
+    element = page.get_by_role("link", name="Hidden Link")
+    
+    # Positive assertions
+    expect(element).to_be_visible()
+    expect(element).to_be_enabled()
+    
+    # Negative assertions (using not_)
+    expect(element).not_to_be_visible()
+    expect(element).not_to_be_enabled()
+    
+    # Alternative: to_be_hidden()
+    expect(element).to_be_hidden()  # Same as not_to_be_visible()
+```
+
+## Custom Timeout
+
+Adjust timeout for specific assertions:
+
+```python
+from playwright.sync_api import expect
+
+# Default timeout (5 seconds)
+expect(element).to_be_visible()
+
+# Custom timeout (10 seconds)
+expect(element).to_be_visible(timeout=10000)
+
+# Longer timeout for slow operations
+expect(page).to_have_url("/dashboard", timeout=30000)
+```
+
+<Note>
+Timeouts are specified in milliseconds. The default timeout is 5000ms (5 seconds).
+</Note>
+
+## Soft Assertions
+
+Continue test execution even if assertion fails:
+
+```python
+import pytest
+from playwright.sync_api import Page, expect
+
+def test_soft_assertions(page: Page):
+    page.goto("https://playwright.dev/python")
+    
+    # Regular assertion - stops on failure
+    expect(page).to_have_title("Playwright")
+    
+    # Soft assertion - continues on failure
+    expect.soft(page).to_have_title("Wrong Title")
+    
+    # More soft assertions
+    expect.soft(page.locator("h1")).to_contain_text("Wrong Text")
+    
+    # Test continues...
+    print("Test keeps running")
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Prefer web-first assertions">
+    Use `expect()` over traditional `assert` statements:
+    ```python
+    # Good
+    expect(element).to_be_visible()
+    
+    # Avoid
+    assert element.is_visible()
+    ```
+  </Step>
+  
+  <Step title="Use specific assertions">
+    Choose the most specific assertion for your use case:
+    ```python
+    # Good - specific
+    expect(input).to_have_value("text")
+    
+    # Less good - generic
+    expect(input).to_have_attribute("value", "text")
+    ```
+  </Step>
+  
+  <Step title="Avoid explicit waits">
+    Let assertions handle waiting:
+    ```python
+    # Good
+    expect(element).to_be_visible()
+    
+    # Avoid
+    page.wait_for_timeout(1000)
+    assert element.is_visible()
+    ```
+  </Step>
+  
+  <Step title="Use meaningful messages">
+    Add custom messages for clarity:
+    ```python
+    expect(element).to_be_visible()
+    ```
+  </Step>
+</Steps>
+
+## Complete Assertion Reference
+
+<CardGroup cols={2}>
+  <Card title="Page" icon="file">
+    - `to_have_url()`
+    - `to_have_title()`
+  </Card>
+  
+  <Card title="Element State" icon="toggle-on">
+    - `to_be_visible()`
+    - `to_be_hidden()`
+    - `to_be_enabled()`
+    - `to_be_disabled()`
+    - `to_be_editable()`
+    - `to_be_focused()`
+    - `to_be_checked()`
+    - `to_be_attached()`
+  </Card>
+  
+  <Card title="Content" icon="text">
+    - `to_have_text()`
+    - `to_contain_text()`
+    - `to_have_value()`
+    - `to_have_values()`
+    - `to_be_empty()`
+  </Card>
+  
+  <Card title="Attributes" icon="tags">
+    - `to_have_attribute()`
+    - `to_have_class()`
+    - `to_have_id()`
+    - `to_have_css()`
+    - `to_have_count()`
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Locators" href="/concepts/locators">
+    Learn how to find elements reliably
+  </Card>
+  
+  <Card title="pytest Basics" href="/concepts/pytest-basics">
+    Structure your tests with pytest
+  </Card>
+</CardGroup>

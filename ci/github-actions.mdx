@@ -1,0 +1,541 @@
+---
+title: 'GitHub Actions'
+description: 'Set up Playwright Python tests in GitHub Actions CI/CD pipelines'
+icon: 'github'
+---
+
+## Overview
+
+GitHub Actions provides a powerful CI/CD platform for running your Playwright Python tests automatically on every push, pull request, or scheduled interval. This guide shows you how to configure Playwright tests in your GitHub Actions workflows.
+
+## Basic Workflow Configuration
+
+<Steps>
+  <Step title="Create workflow file">
+    Create a `.github/workflows/test.yml` file in your repository root:
+
+    ```yaml .github/workflows/test.yml
+    name: Tests
+
+    on:
+      - push
+
+    jobs:
+
+      test:
+        runs-on: ubuntu-latest
+
+        steps:
+          - uses: actions/checkout@v3
+
+          - name: Setup Python
+            uses: actions/setup-python@v4
+            with:
+              python-version: '3.11'
+
+          - name: Install dependencies
+            run: |
+              python -m pip install --upgrade pip
+              pip install pytest-playwright
+
+          - name: Ensure browsers are installed
+            run: python -m playwright install chromium --with-deps
+
+          - name: Run tests
+            run: pytest -v
+    ```
+
+    <Note>
+      The `--with-deps` flag installs system dependencies required by Chromium on Ubuntu.
+    </Note>
+  </Step>
+
+  <Step title="Commit and push">
+    Commit the workflow file to your repository:
+
+    ```bash
+    git add .github/workflows/test.yml
+    git commit -m "Add GitHub Actions workflow for Playwright tests"
+    git push
+    ```
+  </Step>
+
+  <Step title="View results">
+    Navigate to the **Actions** tab in your GitHub repository to see your workflow runs and test results.
+  </Step>
+</Steps>
+
+## Multi-Browser Testing
+
+Run your tests across multiple browsers using a matrix strategy:
+
+```yaml .github/workflows/test.yml
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest-playwright
+
+      - name: Install browsers
+        run: python -m playwright install ${{ matrix.browser }} --with-deps
+
+      - name: Run tests
+        run: pytest --browser ${{ matrix.browser }} -v
+```
+
+<Tip>
+  Set `fail-fast: false` to continue running tests on other browsers even if one fails.
+</Tip>
+
+## Multi-Platform Testing
+
+Test across different operating systems:
+
+```yaml .github/workflows/test.yml
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest-playwright
+
+      - name: Install browsers
+        run: python -m playwright install chromium --with-deps
+
+      - name: Run tests
+        run: pytest -v
+```
+
+## Testing with Local Server
+
+If your tests require a local development server, start it in the background:
+
+```yaml .github/workflows/test.yml
+name: Tests
+
+on:
+  - push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest-playwright
+
+      - name: Ensure browsers are installed
+        run: python -m playwright install chromium --with-deps
+
+      - name: Run tests
+        run: |
+          cd cubeit
+          python -m http.server 8000 &
+          cd ..
+          pytest -v
+```
+
+<Note>
+  The `&` at the end of the server command runs it in the background, allowing subsequent commands to execute.
+</Note>
+
+## Storing Test Artifacts
+
+### Screenshots and Videos
+
+Capture and upload test artifacts for debugging failures:
+
+```yaml .github/workflows/test.yml
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest-playwright
+
+      - name: Install browsers
+        run: python -m playwright install chromium --with-deps
+
+      - name: Run tests
+        run: pytest -v --screenshot=only-on-failure --video=retain-on-failure
+
+      - name: Upload artifacts
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-artifacts
+          path: |
+            test-results/
+            screenshots/
+            videos/
+          retention-days: 30
+```
+
+<Tip>
+  The `if: failure()` condition ensures artifacts are only uploaded when tests fail, saving storage space.
+</Tip>
+
+### Test Reports
+
+Generate and upload HTML test reports:
+
+```yaml .github/workflows/test.yml
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest-playwright pytest-html
+
+      - name: Install browsers
+        run: python -m playwright install chromium --with-deps
+
+      - name: Run tests
+        run: pytest -v --html=report.html --self-contained-html
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-report
+          path: report.html
+```
+
+## Caching Dependencies
+
+Speed up your workflow by caching pip dependencies and Playwright browsers:
+
+```yaml .github/workflows/test.yml
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest-playwright
+
+      - name: Install browsers
+        run: python -m playwright install chromium --with-deps
+
+      - name: Run tests
+        run: pytest -v
+```
+
+<Warning>
+  Browser caching can save significant time, but ensure you invalidate the cache when updating Playwright versions.
+</Warning>
+
+## Running Tests on Pull Requests
+
+Configure your workflow to run on pull requests with branch restrictions:
+
+```yaml .github/workflows/test.yml
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest-playwright
+
+      - name: Install browsers
+        run: python -m playwright install chromium --with-deps
+
+      - name: Run tests
+        run: pytest -v
+```
+
+## Scheduled Test Runs
+
+Run tests on a schedule using cron syntax:
+
+```yaml .github/workflows/scheduled-tests.yml
+name: Scheduled Tests
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest-playwright
+
+      - name: Install browsers
+        run: python -m playwright install chromium --with-deps
+
+      - name: Run tests
+        run: pytest -v
+
+      - name: Send notification on failure
+        if: failure()
+        run: echo "Tests failed! Configure notification here."
+```
+
+<Tip>
+  Add `workflow_dispatch` to enable manual workflow triggers from the GitHub Actions UI.
+</Tip>
+
+## Environment Variables and Secrets
+
+Use environment variables and GitHub secrets for sensitive data:
+
+```yaml .github/workflows/test.yml
+name: Tests
+
+on:
+  push:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    env:
+      BASE_URL: https://staging.example.com
+      CI: true
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest-playwright
+
+      - name: Install browsers
+        run: python -m playwright install chromium --with-deps
+
+      - name: Run tests
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+          USERNAME: ${{ secrets.TEST_USERNAME }}
+          PASSWORD: ${{ secrets.TEST_PASSWORD }}
+        run: pytest -v
+```
+
+<Warning>
+  Never commit secrets directly in your workflow files. Always use GitHub Secrets for sensitive information.
+</Warning>
+
+## Complete Example
+
+Here's a comprehensive workflow combining multiple best practices:
+
+```yaml .github/workflows/test.yml
+name: Playwright Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+        browser: [chromium, firefox]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest-playwright pytest-html
+
+      - name: Install Playwright browsers
+        run: python -m playwright install ${{ matrix.browser }} --with-deps
+
+      - name: Run tests
+        run: |
+          pytest -v \
+            --browser ${{ matrix.browser }} \
+            --screenshot=only-on-failure \
+            --video=retain-on-failure \
+            --html=report-${{ matrix.browser }}-py${{ matrix.python-version }}.html \
+            --self-contained-html
+
+      - name: Upload test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-artifacts-${{ matrix.browser }}-py${{ matrix.python-version }}
+          path: |
+            test-results/
+            screenshots/
+            videos/
+            report-*.html
+          retention-days: 30
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-report-${{ matrix.browser }}-py${{ matrix.python-version }}
+          path: report-*.html
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Best Practices" icon="check" href="/ci/best-practices">
+    Learn CI/CD best practices for Playwright testing
+  </Card>
+  <Card title="Playwright Fixtures" icon="flask" href="/concepts/fixtures">
+    Configure browser and context fixtures
+  </Card>
+</CardGroup>

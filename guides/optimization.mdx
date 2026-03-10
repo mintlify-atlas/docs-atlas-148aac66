@@ -1,0 +1,656 @@
+---
+title: Test Optimization
+description: Learn techniques to speed up your Playwright Python tests and improve test execution efficiency
+---
+
+## Overview
+
+Optimizing test execution is crucial for maintaining fast feedback loops and efficient CI/CD pipelines. Playwright offers several strategies to speed up your tests without compromising reliability.
+
+<Note>
+A 10-second reduction in test suite execution time can save hours over thousands of test runs in CI/CD.
+</Note>
+
+## Why Optimize Tests?
+
+<CardGroup cols={2}>
+  <Card title="Faster Feedback" icon="gauge-high">
+    Get test results quickly during development
+  </Card>
+  <Card title="CI/CD Efficiency" icon="clock">
+    Reduce pipeline execution time and costs
+  </Card>
+  <Card title="Better Productivity" icon="rocket">
+    Run tests more frequently without delays
+  </Card>
+  <Card title="Resource Savings" icon="coins">
+    Lower compute costs in cloud environments
+  </Card>
+</CardGroup>
+
+## Skip Unnecessary Resources
+
+One of the most effective optimizations is to block resources that aren't needed for testing:
+
+```python
+import pytest
+from playwright.sync_api import Page, expect, Route
+
+NOT_ALLOWED_RESOURCES = (
+    "image", "font", "stylesheet", "media"
+)
+
+def on_route(route: Route):
+    if route.request.resource_type in NOT_ALLOWED_RESOURCES:
+        route.abort()
+    else:
+        route.continue_()
+
+@pytest.fixture(autouse=True)
+def skip_resources(page: Page):
+    page.route("**", on_route)
+
+def test_page_has_docs_link(page: Page):
+    page.goto("https://playwright.dev/python")
+    link = page.get_by_role("link", name="docs")
+
+    expect(link).to_be_visible()
+
+def test_get_started_link(page: Page):
+    page.goto("https://playwright.dev/python")
+
+    link = page.get_by_role("link", name="GET STARTED")
+    link.click()
+
+    expect(page).to_have_url(
+        "https://playwright.dev/python/docs/intro"
+    )
+```
+
+<Tip>
+**Performance Impact**: Blocking images, fonts, and stylesheets can reduce page load time by 30-70%, especially for media-heavy sites.
+</Tip>
+
+## Resource Blocking Strategies
+
+### Block by Resource Type
+
+<Tabs>
+  <Tab title="Basic Blocking">
+    ```python
+    def block_images(route: Route):
+        if route.request.resource_type == "image":
+            route.abort()
+        else:
+            route.continue_()
+
+    page.route("**", block_images)
+    ```
+  </Tab>
+
+  <Tab title="Multiple Types">
+    ```python
+    BLOCKED_TYPES = ("image", "font", "stylesheet", "media")
+
+    def block_resources(route: Route):
+        if route.request.resource_type in BLOCKED_TYPES:
+            route.abort()
+        else:
+            route.continue_()
+
+    page.route("**", block_resources)
+    ```
+  </Tab>
+
+  <Tab title="Selective Blocking">
+    ```python
+    def block_selectively(route: Route):
+        # Block all images except logos
+        if route.request.resource_type == "image":
+            if "logo" not in route.request.url:
+                route.abort()
+                return
+        
+        route.continue_()
+
+    page.route("**", block_selectively)
+    ```
+  </Tab>
+</Tabs>
+
+### Block by Domain
+
+Block third-party resources:
+
+```python
+def block_third_party(route: Route):
+    # Block analytics, ads, and tracking
+    blocked_domains = [
+        "google-analytics.com",
+        "doubleclick.net",
+        "facebook.com/tr",
+        "hotjar.com",
+        "mixpanel.com"
+    ]
+    
+    if any(domain in route.request.url for domain in blocked_domains):
+        route.abort()
+    else:
+        route.continue_()
+
+page.route("**", block_third_party)
+```
+
+### Block by URL Pattern
+
+```python
+def block_analytics(route: Route):
+    # Block specific URL patterns
+    blocked_patterns = [
+        "*/analytics/*",
+        "*/tracking/*",
+        "*/ads/*",
+        "*.woff2",
+        "*.woff"
+    ]
+    
+    url = route.request.url
+    
+    if any(pattern.replace("*", "") in url for pattern in blocked_patterns):
+        route.abort()
+    else:
+        route.continue_()
+
+page.route("**", block_analytics)
+```
+
+## Parallel Test Execution
+
+Run tests in parallel using pytest-xdist:
+
+### Installation
+
+```bash
+pip install pytest-xdist
+```
+
+### Usage
+
+```bash
+# Run with 4 workers
+pytest -n 4
+
+# Use all CPU cores
+pytest -n auto
+
+# Run with logical CPU count
+pytest -n logical
+```
+
+<Warning>
+Parallel execution requires tests to be independent. Shared state between tests will cause failures.
+</Warning>
+
+### Parallel-Safe Fixtures
+
+```python
+import pytest
+from playwright.sync_api import Page
+import os
+
+@pytest.fixture
+def unique_output_dir(tmp_path, worker_id):
+    """Create unique directory for each worker."""
+    if worker_id == "master":
+        # Not running in parallel
+        return tmp_path
+    
+    # Create worker-specific directory
+    worker_dir = tmp_path / f"worker_{worker_id}"
+    worker_dir.mkdir(exist_ok=True)
+    return worker_dir
+
+@pytest.fixture
+def screenshot_on_failure(page: Page, request, unique_output_dir):
+    yield
+    
+    if request.node.rep_call.failed:
+        screenshot_path = unique_output_dir / f"{request.node.name}.png"
+        page.screenshot(path=str(screenshot_path))
+```
+
+## Reuse Browser Context
+
+Reuse contexts across tests to save initialization time:
+
+```python
+import pytest
+from playwright.sync_api import Browser, BrowserContext
+
+@pytest.fixture(scope="session")
+def browser_context(browser: Browser) -> BrowserContext:
+    """Reuse browser context across all tests in session."""
+    context = browser.new_context()
+    yield context
+    context.close()
+
+@pytest.fixture
+def page(browser_context: BrowserContext):
+    """Create a new page for each test."""
+    page = browser_context.new_page()
+    yield page
+    page.close()
+```
+
+<Warning>
+**Important**: Only reuse contexts when tests don't modify global state like cookies or local storage.
+</Warning>
+
+## Reduce Waits and Timeouts
+
+### Configure Global Timeouts
+
+```python
+import pytest
+from playwright.sync_api import Browser
+
+@pytest.fixture
+def fast_context(browser: Browser):
+    context = browser.new_context()
+    
+    # Set shorter timeouts for faster failures
+    context.set_default_timeout(5000)  # 5 seconds instead of 30
+    context.set_default_navigation_timeout(10000)  # 10 seconds
+    
+    yield context
+    context.close()
+```
+
+### Use Explicit Waits Only When Needed
+
+```python
+# Bad: Unnecessary wait
+page.goto("https://example.com")
+page.wait_for_timeout(2000)  # Arbitrary wait
+page.click("button")
+
+# Good: Wait for specific condition
+page.goto("https://example.com")
+page.wait_for_selector("button:enabled")  # Wait for button to be ready
+page.click("button")
+
+# Better: Playwright's auto-waiting
+page.goto("https://example.com")
+page.click("button")  # Automatically waits for button to be ready
+```
+
+## Headless Mode
+
+Always use headless mode for faster execution:
+
+```python
+# pytest.ini or conftest.py
+@pytest.fixture(scope="session")
+def browser_type_launch_args():
+    return {
+        "headless": True,  # Significantly faster
+        "args": [
+            "--disable-blink-features=AutomationControlled",
+            "--disable-dev-shm-usage",
+        ]
+    }
+```
+
+<Tip>
+Headless mode is typically 20-30% faster than headed mode.
+</Tip>
+
+## Skip Animations and Transitions
+
+Disable animations to speed up tests:
+
+```python
+import pytest
+from playwright.sync_api import Browser
+
+@pytest.fixture
+def fast_page(browser: Browser):
+    context = browser.new_context()
+    page = context.new_page()
+    
+    # Disable animations
+    page.add_init_script("""
+        window.AnimationPlaybackRate = 100;
+        
+        const style = document.createElement('style');
+        style.innerHTML = `
+            *, *::before, *::after {
+                animation-duration: 0.001ms !important;
+                animation-delay: 0ms !important;
+                transition-duration: 0.001ms !important;
+                transition-delay: 0ms !important;
+            }
+        `;
+        document.head.appendChild(style);
+    """)
+    
+    yield page
+    context.close()
+```
+
+## Use API for Test Data Setup
+
+Set up test data via API instead of UI:
+
+```python
+import pytest
+from playwright.sync_api import Page, Playwright, APIRequestContext
+
+@pytest.fixture
+def setup_user_via_api(playwright: Playwright):
+    """Create test user via API (fast)."""
+    api = playwright.request.new_context(
+        base_url="https://api.example.com"
+    )
+    
+    # Create user via API - much faster than UI
+    response = api.post("/users", data={
+        "username": "testuser",
+        "email": "test@example.com"
+    })
+    
+    user = response.json()
+    
+    yield user
+    
+    # Cleanup via API
+    api.delete(f"/users/{user['id']}")
+    api.dispose()
+
+def test_user_profile(page: Page, setup_user_via_api):
+    """Test uses pre-created user data."""
+    user = setup_user_via_api
+    
+    page.goto(f"https://example.com/users/{user['id']}")
+    # Test the UI with data set up via API
+```
+
+<Tip>
+**Speed Gain**: Setting up data via API is typically 5-10x faster than using the UI.
+</Tip>
+
+## Smart Test Organization
+
+### Group Related Tests
+
+```python
+import pytest
+
+class TestUserProfile:
+    """Group tests that share setup."""
+    
+    @pytest.fixture(autouse=True)
+    def setup(self, page):
+        # Shared setup for all tests in class
+        page.goto("https://example.com/profile")
+        page.fill("#username", "testuser")
+        page.fill("#password", "password")
+        page.click("button[type=submit]")
+    
+    def test_view_profile(self, page):
+        # Uses shared setup
+        assert page.locator("h1").inner_text() == "Profile"
+    
+    def test_edit_profile(self, page):
+        # Uses shared setup
+        page.click("#edit-button")
+        assert page.locator("#edit-form").is_visible()
+```
+
+### Use Markers to Filter Tests
+
+```python
+import pytest
+
+@pytest.mark.fast
+def test_quick_check(page):
+    """Runs in < 1 second."""
+    page.goto("https://example.com")
+    assert page.title()
+
+@pytest.mark.slow
+def test_full_checkout_flow(page):
+    """Runs in > 30 seconds."""
+    # Long test...
+    pass
+```
+
+Run only fast tests:
+```bash
+pytest -m fast
+```
+
+## Browser Caching
+
+Enable caching to speed up repeated page loads:
+
+```python
+import pytest
+from playwright.sync_api import Browser
+import tempfile
+
+@pytest.fixture(scope="session")
+def persistent_context(browser: Browser):
+    """Use persistent context with cache."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        context = browser.new_persistent_context(
+            user_data_dir=temp_dir,
+            # Cache will be stored here
+        )
+        yield context
+        context.close()
+```
+
+## Network Throttling (When Needed)
+
+For most tests, disable throttling:
+
+```python
+context = browser.new_context(
+    offline=False,
+    # Don't throttle network for faster tests
+)
+```
+
+## Optimize Selectors
+
+Use efficient selectors:
+
+```python
+# Slow: Complex CSS selector
+page.locator("div.container > div.content > ul.list > li.item:nth-child(3)")
+
+# Fast: Test ID
+page.locator("[data-testid='item-3']")
+
+# Fast: Role-based
+page.get_by_role("listitem").nth(2)
+
+# Fast: Text (for unique text)
+page.get_by_text("Item 3")
+```
+
+## Reduce Screenshot Usage
+
+Take screenshots only on failure:
+
+```python
+import pytest
+from playwright.sync_api import Page
+
+@pytest.fixture
+def screenshot_on_failure(page: Page, request):
+    yield
+    
+    # Only take screenshot if test failed
+    if request.node.rep_call.failed:
+        page.screenshot(
+            path=f"screenshots/{request.node.name}.png"
+        )
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, f"rep_{rep.when}", rep)
+```
+
+## Performance Comparison
+
+Typical improvements from optimization techniques:
+
+| Optimization | Speed Improvement |
+|--------------|------------------|
+| Block resources | 30-70% |
+| Parallel execution | 2-4x (with 4 cores) |
+| Headless mode | 20-30% |
+| Skip animations | 10-20% |
+| API data setup | 5-10x for setup |
+| Reuse context | 15-25% |
+
+## Complete Optimized Configuration
+
+```python
+# conftest.py
+import pytest
+from playwright.sync_api import Browser, BrowserContext, Page, Route
+
+# Blocked resources
+BLOCKED_RESOURCES = ("image", "font", "stylesheet", "media")
+BLOCKED_DOMAINS = [
+    "google-analytics.com",
+    "doubleclick.net",
+    "facebook.com/tr",
+]
+
+def block_resources(route: Route):
+    """Block unnecessary resources."""
+    # Block by resource type
+    if route.request.resource_type in BLOCKED_RESOURCES:
+        route.abort()
+        return
+    
+    # Block by domain
+    if any(domain in route.request.url for domain in BLOCKED_DOMAINS):
+        route.abort()
+        return
+    
+    route.continue_()
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args():
+    """Configure browser for speed."""
+    return {
+        "headless": True,
+        "args": [
+            "--disable-blink-features=AutomationControlled",
+            "--disable-dev-shm-usage",
+            "--disable-web-security",
+        ]
+    }
+
+@pytest.fixture(scope="session")
+def browser_context_args():
+    """Configure context for speed."""
+    return {
+        "viewport": {"width": 1280, "height": 720},
+        "ignore_https_errors": True,
+    }
+
+@pytest.fixture
+def optimized_page(browser: Browser):
+    """Create optimized page for testing."""
+    context = browser.new_context()
+    context.set_default_timeout(10000)  # 10 seconds
+    
+    page = context.new_page()
+    
+    # Block resources
+    page.route("**", block_resources)
+    
+    # Disable animations
+    page.add_init_script("""
+        const style = document.createElement('style');
+        style.innerHTML = `* {
+            animation-duration: 0.001ms !important;
+            transition-duration: 0.001ms !important;
+        }`;
+        document.head.appendChild(style);
+    """)
+    
+    yield page
+    
+    context.close()
+```
+
+Run with pytest.ini:
+```ini
+[pytest]
+addopts = 
+    -n auto
+    --maxfail=3
+    --tb=short
+    -v
+```
+
+## Best Practices
+
+<Warning>
+**Avoid These Mistakes:**
+- Don't optimize prematurely - measure first
+- Don't skip essential resources needed for functionality
+- Don't reuse contexts with tests that modify state
+- Don't set timeouts too low (causes flaky tests)
+</Warning>
+
+<Tip>
+**Best Practices:**
+- Profile tests to find bottlenecks
+- Block resources aggressively in test environments
+- Use parallel execution for independent tests
+- Set up data via API, test via UI
+- Use headless mode in CI/CD
+- Disable animations and transitions
+- Take screenshots/videos only on failure
+- Keep tests independent for parallel execution
+</Tip>
+
+## Measuring Performance
+
+```bash
+# Time test execution
+time pytest
+
+# Show slowest tests
+pytest --durations=10
+
+# Show all test durations
+pytest --durations=0
+```
+
+## When to Optimize
+
+<CardGroup cols={2}>
+  <Card title="✅ Optimize When" icon="check">
+    - Test suite takes > 5 minutes
+    - CI/CD pipeline is slow
+    - Tests run frequently
+    - You have many parallel workers available
+  </Card>
+  <Card title="❌ Don't Optimize When" icon="xmark">
+    - Tests are already fast (< 1 minute)
+    - Optimization would make tests fragile
+    - Tests are not run frequently
+    - You haven't measured bottlenecks
+  </Card>
+</CardGroup>

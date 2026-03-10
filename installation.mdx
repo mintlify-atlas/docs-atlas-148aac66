@@ -1,0 +1,273 @@
+---
+title: 'Installation'
+description: 'Install Python, pip, Playwright, and pytest to start writing automated tests'
+---
+
+## Prerequisites
+
+Before installing Playwright, you need Python 3.8 or higher.
+
+<Steps>
+  <Step title="Check Python Version">
+    Verify that Python is installed and check your version:
+
+    ```bash
+    python --version
+    # or
+    python3 --version
+    ```
+
+    You should see `Python 3.8.0` or higher.
+
+    <Note>
+      If Python is not installed or your version is outdated, download the latest version from [python.org/downloads](https://www.python.org/downloads/)
+    </Note>
+  </Step>
+
+  <Step title="Verify pip Installation">
+    pip comes bundled with Python. Verify it's installed:
+
+    ```bash
+    pip --version
+    # or
+    pip3 --version
+    ```
+
+    You should see output like `pip 23.0 from ...`
+  </Step>
+</Steps>
+
+## Setting Up a Virtual Environment
+
+It's recommended to use a virtual environment to isolate your project dependencies.
+
+<Steps>
+  <Step title="Create Virtual Environment">
+    <CodeGroup>
+    ```bash macOS/Linux
+    python3 -m venv venv
+    ```
+
+    ```bash Windows
+    python -m venv venv
+    ```
+    </CodeGroup>
+
+    <Tip>
+      For detailed video tutorials on setting up virtual environments:
+      - [macOS Guide](https://www.youtube.com/watch?v=Y9jiGNFOhOs)
+      - [Linux Guide](https://www.youtube.com/watch?v=07fl24lF0Xk)
+    </Tip>
+  </Step>
+
+  <Step title="Activate Virtual Environment">
+    <CodeGroup>
+    ```bash macOS/Linux
+    source venv/bin/activate
+    ```
+
+    ```bash Windows (Command Prompt)
+    venv\Scripts\activate.bat
+    ```
+
+    ```bash Windows (PowerShell)
+    venv\Scripts\Activate.ps1
+    ```
+    </CodeGroup>
+
+    Your terminal prompt should now show `(venv)` indicating the virtual environment is active.
+  </Step>
+</Steps>
+
+## Installing Playwright
+
+With Python and pip ready, install Playwright and pytest-playwright.
+
+<Steps>
+  <Step title="Install pytest-playwright">
+    Install the pytest-playwright plugin, which includes Playwright:
+
+    ```bash
+    pip install pytest-playwright
+    ```
+
+    This installs:
+    - `playwright` - The core Playwright library
+    - `pytest-playwright` - Pytest plugin for Playwright integration
+    - `pytest` - The pytest testing framework
+  </Step>
+
+  <Step title="Install Browsers">
+    Playwright requires browser binaries to run tests. Install them with:
+
+    ```bash
+    playwright install
+    ```
+
+    This downloads and installs:
+    - Chromium
+    - Firefox
+    - WebKit
+
+    <Note>
+      The first time you run this command, it will download ~400MB of browser binaries. This is a one-time operation.
+    </Note>
+
+    To install only specific browsers:
+
+    ```bash
+    # Install only Chromium
+    playwright install chromium
+
+    # Install Chromium and Firefox
+    playwright install chromium firefox
+    ```
+  </Step>
+
+  <Step title="Install System Dependencies (Linux only)">
+    On Linux, you may need to install additional system dependencies:
+
+    ```bash
+    playwright install-deps
+    ```
+
+    <Warning>
+      This command requires sudo privileges and installs system-level packages needed for browser automation.
+    </Warning>
+  </Step>
+</Steps>
+
+## Verify Installation
+
+Confirm everything is installed correctly:
+
+<Steps>
+  <Step title="Check Playwright Version">
+    ```bash
+    playwright --version
+    ```
+
+    You should see output like `Version 1.40.0`
+  </Step>
+
+  <Step title="Check pytest-playwright">
+    ```bash
+    pytest --version
+    ```
+
+    You should see pytest version information.
+  </Step>
+
+  <Step title="List Installed Browsers">
+    ```bash
+    playwright install --help
+    ```
+
+    This shows available browsers and their installation status.
+  </Step>
+</Steps>
+
+## Alternative Installation Methods
+
+### Using requirements.txt
+
+For project dependency management, create a `requirements.txt` file:
+
+```txt requirements.txt
+pytest-playwright==0.4.3
+```
+
+Then install:
+
+```bash
+pip install -r requirements.txt
+playwright install
+```
+
+### Using Poetry
+
+If you use Poetry for dependency management:
+
+```bash
+poetry add pytest-playwright
+poetry run playwright install
+```
+
+### Using pipenv
+
+For pipenv users:
+
+```bash
+pipenv install pytest-playwright
+pipenv run playwright install
+```
+
+## Updating Playwright
+
+To update to the latest version:
+
+```bash
+pip install --upgrade pytest-playwright
+playwright install
+```
+
+<Note>
+  Always run `playwright install` after upgrading to ensure browser binaries match your Playwright version.
+</Note>
+
+## Troubleshooting
+
+### Permission Errors on Linux/macOS
+
+If you encounter permission errors, ensure you're using a virtual environment:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install pytest-playwright
+```
+
+### Missing System Dependencies
+
+If browsers fail to launch on Linux:
+
+```bash
+sudo playwright install-deps
+```
+
+### Windows Execution Policy Error
+
+If PowerShell prevents activating the virtual environment:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+### Browser Not Found Error
+
+If you see "Browser not found" errors:
+
+```bash
+# Reinstall browsers
+playwright install --force
+```
+
+## What's Installed?
+
+After installation, you have:
+
+- **Playwright** - Core automation library
+- **pytest** - Testing framework
+- **pytest-playwright** - Pytest fixtures and configuration
+- **Browser binaries** - Chromium, Firefox, and WebKit
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Run your first Playwright automation script
+  </Card>
+  <Card title="First Test" icon="flask" href="/first-test">
+    Write and run your first test with pytest
+  </Card>
+</CardGroup>

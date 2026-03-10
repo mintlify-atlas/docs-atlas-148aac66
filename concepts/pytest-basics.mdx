@@ -1,0 +1,479 @@
+---
+title: 'pytest Basics'
+description: 'Learn the fundamentals of pytest for organizing and running Playwright tests'
+---
+
+# pytest Basics
+
+pytest is Python's most popular testing framework. It provides powerful features for organizing tests, sharing setup code, and generating detailed reports. When combined with Playwright, pytest creates a robust testing solution.
+
+## Why pytest?
+
+pytest offers several advantages over Python's built-in `unittest` module:
+
+- **Simple syntax**: No boilerplate, just functions
+- **Powerful fixtures**: Share setup code efficiently
+- **Rich assertions**: Detailed failure messages
+- **Plugins**: Extensive ecosystem including `pytest-playwright`
+- **Flexible**: Easy to organize and scale tests
+
+<Note>
+Playwright officially supports pytest through the `pytest-playwright` plugin, making it the recommended testing framework for Playwright Python.
+</Note>
+
+## Basic Test Structure
+
+A pytest test is simply a function that starts with `test_`:
+
+```python
+def test_simple_assertion():
+    assert 1 + 1 == 2
+```
+
+That's it! No classes, no inheritance required.
+
+## Writing Your First Tests
+
+Let's start with a simple test module:
+
+```python
+import json
+
+def generate_report():
+    # Generate report data
+    dt = {
+        "timestamp": "2023-4-27 12-37-9",
+        "status": "PASSED",
+        "summary": "module.py::test_case"
+    }
+    # Write data to json file
+    with open("report.json", "w") as file:
+        json.dump(dt, file)
+```
+
+Now create tests for this module:
+
+```python
+import json
+import report
+
+def test_report_generation():
+    report.generate_report()
+    
+    with open("report.json") as file:
+        data = json.load(file)
+    
+    assert type(data) == dict
+
+def test_report_has_required_fields():
+    report.generate_report()
+    
+    with open("report.json") as file:
+        data = json.load(file)
+    
+    assert "timestamp" in data
+    assert "status" in data
+    assert "summary" in data
+```
+
+<Warning>
+Notice the code duplication? Both tests generate the report and load the file. This is where fixtures come in handy.
+</Warning>
+
+## Fixtures: Reusable Setup
+
+Fixtures eliminate code duplication by providing reusable setup code:
+
+```python
+import json
+import report
+import pytest
+
+@pytest.fixture
+def report_json():
+    print("\n[ Fixture ]: requested...")
+    report.generate_report()
+    
+    with open("report.json") as file:
+        print("[ Fixture ]: ...return report data")
+        return json.load(file)
+
+def test_report_json(report_json):
+    print("[ Test ]: received -", report_json)
+    assert type(report_json) == dict
+
+def test_report_fields(report_json):
+    print("[ Test ]: received -", report_json)
+    assert "timestamp" in report_json
+    assert "status" in report_json
+```
+
+<Steps>
+  <Step title="Define the fixture">
+    Create a function decorated with `@pytest.fixture`:
+    ```python
+    @pytest.fixture
+    def report_json():
+        # Setup code
+        return data
+    ```
+  </Step>
+  
+  <Step title="Request the fixture">
+    Add the fixture name as a parameter to your test:
+    ```python
+    def test_report_json(report_json):
+        assert type(report_json) == dict
+    ```
+  </Step>
+  
+  <Step title="pytest handles the rest">
+    pytest automatically calls the fixture and passes its return value to your test.
+  </Step>
+</Steps>
+
+## Fixture Scopes
+
+Fixtures can have different scopes to control how often they run:
+
+<Tabs>
+  <Tab title="function (default)">
+    Fixture runs once per test function.
+    
+    ```python
+    @pytest.fixture(scope="function")
+    def fresh_data():
+        # Runs before each test
+        return generate_data()
+    ```
+  </Tab>
+  
+  <Tab title="class">
+    Fixture runs once per test class.
+    
+    ```python
+    @pytest.fixture(scope="class")
+    def shared_resource():
+        # Runs once per class
+        resource = setup_resource()
+        yield resource
+        cleanup_resource(resource)
+    ```
+  </Tab>
+  
+  <Tab title="module">
+    Fixture runs once per test module (file).
+    
+    ```python
+    @pytest.fixture(scope="module")
+    def database():
+        # Runs once per module
+        db = connect_database()
+        yield db
+        db.close()
+    ```
+  </Tab>
+  
+  <Tab title="session">
+    Fixture runs once per test session (entire test run).
+    
+    ```python
+    @pytest.fixture(scope="session")
+    def browser():
+        # Runs once for all tests
+        browser = launch_browser()
+        yield browser
+        browser.close()
+    ```
+  </Tab>
+</Tabs>
+
+## Fixture Teardown
+
+Use `yield` in fixtures to provide teardown logic:
+
+```python
+import pytest
+from playwright.sync_api import Page
+
+@pytest.fixture(autouse=True, scope="function")
+def visit_playwright(page: Page):
+    # Setup
+    page.goto("https://playwright.dev/python")
+    
+    # Yield control to the test
+    yield page
+    
+    # Teardown (runs after test completes)
+    page.close()
+    print("\n[ Fixture ]: page closed!")
+
+def test_page_has_docs_link(page: Page):
+    link = page.get_by_role("link", name="Docs")
+    assert link.is_visible()
+```
+
+<Note>
+The `autouse=True` parameter means this fixture runs automatically for every test, even if the test doesn't explicitly request it.
+</Note>
+
+## Test Organization
+
+Organize tests using a clear directory structure:
+
+```
+tests/
+├── conftest.py          # Shared fixtures
+├── test_auth.py         # Authentication tests
+├── test_navigation.py   # Navigation tests
+└── ui/
+    ├── conftest.py      # UI-specific fixtures
+    ├── test_homepage.py
+    └── test_search.py
+```
+
+### conftest.py
+
+The `conftest.py` file is special - fixtures defined here are available to all tests in the same directory and subdirectories:
+
+```python
+# conftest.py
+import pytest
+from playwright.sync_api import Page
+
+@pytest.fixture
+def authenticated_page(page: Page):
+    # Login logic
+    page.goto("https://example.com/login")
+    page.fill("#username", "testuser")
+    page.fill("#password", "testpass")
+    page.click("button[type='submit']")
+    return page
+```
+
+Now any test can use `authenticated_page`:
+
+```python
+# test_dashboard.py
+def test_dashboard_loads(authenticated_page):
+    authenticated_page.goto("/dashboard")
+    assert authenticated_page.locator("h1").text_content() == "Dashboard"
+```
+
+## Running Tests
+
+<CodeGroup>
+```bash Run all tests
+pytest
+```
+
+```bash Run specific file
+pytest tests/test_auth.py
+```
+
+```bash Run specific test
+pytest tests/test_auth.py::test_login
+```
+
+```bash Run with verbose output
+pytest -v
+```
+
+```bash Run with output capture disabled
+pytest -s
+```
+
+```bash Run tests matching pattern
+pytest -k "auth"
+```
+</CodeGroup>
+
+## Assertions
+
+pytest provides rich assertion introspection:
+
+```python
+def test_assertions():
+    # Simple assertions
+    assert True
+    assert 1 + 1 == 2
+    assert "hello" in "hello world"
+    
+    # Assertions with custom messages
+    assert False, "This is a custom error message"
+    
+    # Testing exceptions
+    with pytest.raises(ValueError):
+        int("not a number")
+    
+    # Testing warnings
+    with pytest.warns(UserWarning):
+        warnings.warn("warning message", UserWarning)
+```
+
+When an assertion fails, pytest provides detailed information:
+
+```
+    def test_example():
+>       assert [1, 2, 3] == [1, 2, 4]
+E       AssertionError: assert [1, 2, 3] == [1, 2, 4]
+E         At index 2 diff: 3 != 4
+```
+
+## Parametrization
+
+Run the same test with different inputs:
+
+```python
+import pytest
+
+@pytest.mark.parametrize("input,expected", [
+    (1, 2),
+    (2, 3),
+    (3, 4),
+])
+def test_increment(input, expected):
+    assert input + 1 == expected
+```
+
+This creates three separate tests, one for each parameter set.
+
+<Tabs>
+  <Tab title="Single parameter">
+    ```python
+    @pytest.mark.parametrize("browser", ["chromium", "firefox", "webkit"])
+    def test_on_browser(browser):
+        print(f"Testing on {browser}")
+    ```
+  </Tab>
+  
+  <Tab title="Multiple parameters">
+    ```python
+    @pytest.mark.parametrize("username,password", [
+        ("user1", "pass1"),
+        ("user2", "pass2"),
+        ("user3", "pass3"),
+    ])
+    def test_login(username, password):
+        # Test with each combination
+        pass
+    ```
+  </Tab>
+</Tabs>
+
+## Markers
+
+Mark tests for selective execution:
+
+```python
+import pytest
+
+@pytest.mark.slow
+def test_slow_operation():
+    # This test is marked as slow
+    pass
+
+@pytest.mark.skip(reason="Not implemented yet")
+def test_not_ready():
+    pass
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Linux only")
+def test_linux_feature():
+    pass
+
+@pytest.mark.xfail
+def test_known_to_fail():
+    assert False
+```
+
+Run tests by marker:
+
+```bash
+# Run only slow tests
+pytest -m slow
+
+# Run all except slow tests
+pytest -m "not slow"
+```
+
+## Configuration
+
+Create `pytest.ini` for test configuration:
+
+```ini
+[pytest]
+addopts = --headed --slowmo=500
+testpaths = tests
+python_files = test_*.py
+python_classes = Test*
+python_functions = test_*
+markers =
+    slow: marks tests as slow
+    integration: marks tests as integration tests
+```
+
+<ParamField path="addopts" type="string">
+  Command-line options to always apply
+</ParamField>
+
+<ParamField path="testpaths" type="string">
+  Directories to search for tests
+</ParamField>
+
+<ParamField path="markers" type="string">
+  Custom marker definitions
+</ParamField>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="One Assert Per Test" icon="check">
+    Keep tests focused with a single assertion when possible:
+    ```python
+    def test_user_name():
+        assert user.name == "John"
+    ```
+  </Card>
+  
+  <Card title="Descriptive Names" icon="signature">
+    Use clear, descriptive test names:
+    ```python
+    def test_user_cannot_delete_other_users_posts():
+        pass
+    ```
+  </Card>
+  
+  <Card title="Arrange-Act-Assert" icon="list-ol">
+    Structure tests with clear phases:
+    ```python
+    def test_example():
+        # Arrange
+        user = User("John")
+        # Act
+        result = user.greet()
+        # Assert
+        assert result == "Hello, John"
+    ```
+  </Card>
+  
+  <Card title="Use Fixtures" icon="puzzle-piece">
+    Share setup code with fixtures instead of duplicating:
+    ```python
+    @pytest.fixture
+    def user():
+        return User("John")
+    ```
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="pytest-playwright Plugin" href="/concepts/pytest-playwright-plugin">
+    Learn about the official Playwright plugin for pytest
+  </Card>
+  
+  <Card title="Fixtures" href="/concepts/fixtures">
+    Deep dive into Playwright fixtures
+  </Card>
+</CardGroup>

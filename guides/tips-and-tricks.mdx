@@ -1,0 +1,854 @@
+---
+title: Tips and Tricks
+description: Essential tips, tricks, and best practices for effective Playwright Python testing
+---
+
+## Overview
+
+This guide covers practical tips, tricks, and best practices that will help you write more effective, maintainable, and reliable Playwright tests in Python.
+
+<Note>
+These tips are collected from real-world testing scenarios and can significantly improve your testing workflow.
+</Note>
+
+## Locator Strategies
+
+### Use Role-Based Locators
+
+Role-based locators are the most resilient and accessible:
+
+```python
+from playwright.sync_api import Page
+
+def test_navigation(page: Page):
+    page.goto("https://playwright.dev/python")
+    
+    # Preferred: Role-based locators
+    link = page.get_by_role("link", name="GET STARTED")
+    link.click()
+    
+    # Accessibility-friendly and resilient to HTML changes
+    button = page.get_by_role("button", name="Submit")
+    button.click()
+```
+
+<Tip>
+Role-based locators align with how assistive technologies see your page, making your tests verify accessibility too.
+</Tip>
+
+### Locator Priority
+
+Follow this priority order for locators:
+
+<Steps>
+  <Step title="1. Role-Based Locators (Best)">
+    ```python
+    page.get_by_role("button", name="Submit")
+    page.get_by_role("link", name="Home")
+    page.get_by_role("textbox", name="Email")
+    ```
+  </Step>
+
+  <Step title="2. Label and Placeholder">
+    ```python
+    page.get_by_label("Email address")
+    page.get_by_placeholder("Enter your email")
+    ```
+  </Step>
+
+  <Step title="3. Text Content">
+    ```python
+    page.get_by_text("Welcome back")
+    page.get_by_text("Sign in", exact=True)
+    ```
+  </Step>
+
+  <Step title="4. Test IDs">
+    ```python
+    page.get_by_test_id("submit-button")
+    page.locator("[data-testid='user-profile']")
+    ```
+  </Step>
+
+  <Step title="5. CSS/XPath (Last Resort)">
+    ```python
+    page.locator("button.submit")
+    page.locator("xpath=//button[@type='submit']")
+    ```
+  </Step>
+</Steps>
+
+### Chaining Locators
+
+Narrow down your search by chaining locators:
+
+```python
+# Find button within a specific section
+page.locator("section.checkout").get_by_role("button", name="Pay")
+
+# Find input within a form
+page.locator("form#login").get_by_placeholder("Password")
+
+# Multiple levels
+page.locator("div.user-card").locator("h2").get_by_text("John Doe")
+```
+
+## Assertions Best Practices
+
+### Use Web-First Assertions
+
+Playwright's `expect` provides auto-waiting assertions:
+
+```python
+from playwright.sync_api import Page, expect
+
+def test_page_assertions(page: Page):
+    page.goto("https://playwright.dev/python")
+    
+    # Page assertions
+    expect(page).to_have_url("https://playwright.dev/python")
+    expect(page).to_have_title("Installation | Playwright Python")
+    
+    # Element state assertions
+    link = page.get_by_role("link", name="GET STARTED")
+    expect(link).to_be_visible()
+    expect(link).to_be_enabled()
+    
+    # Negative assertions
+    hidden_element = page.get_by_role("link", name="Get Python")
+    expect(hidden_element).to_be_hidden()
+    expect(hidden_element).not_to_be_visible()
+```
+
+<Warning>
+Avoid using plain Python `assert` for element checks. Use `expect()` for automatic waiting and better error messages.
+</Warning>
+
+### Common Assertion Patterns
+
+<Tabs>
+  <Tab title="Element State">
+    ```python
+    # Visibility
+    expect(element).to_be_visible()
+    expect(element).to_be_hidden()
+    
+    # Enabled/Disabled
+    expect(button).to_be_enabled()
+    expect(button).to_be_disabled()
+    
+    # Checked/Unchecked
+    expect(checkbox).to_be_checked()
+    expect(checkbox).not_to_be_checked()
+    
+    # Focus
+    expect(input_field).to_be_focused()
+    ```
+  </Tab>
+
+  <Tab title="Content">
+    ```python
+    # Text content
+    expect(heading).to_have_text("Welcome")
+    expect(paragraph).to_contain_text("substring")
+    
+    # Exact vs partial match
+    expect(label).to_have_text("Email", exact=True)
+    expect(label).to_contain_text("Email")
+    
+    # Multiple elements
+    expect(page.locator("li")).to_have_text([
+        "Item 1", "Item 2", "Item 3"
+    ])
+    ```
+  </Tab>
+
+  <Tab title="Attributes">
+    ```python
+    # Attribute values
+    expect(link).to_have_attribute("href", "/docs")
+    expect(input_field).to_have_attribute("type", "email")
+    
+    # CSS classes
+    expect(element).to_have_class("active")
+    expect(element).to_have_class(["btn", "btn-primary"])
+    
+    # Input values
+    expect(input_field).to_have_value("test@example.com")
+    ```
+  </Tab>
+
+  <Tab title="Counts">
+    ```python
+    # Count elements
+    expect(page.locator("li")).to_have_count(5)
+    
+    # Check if exists
+    expect(page.locator(".error-message")).to_have_count(0)
+    
+    # At least one
+    expect(page.locator(".item")).to_have_count(lambda c: c > 0)
+    ```
+  </Tab>
+</Tabs>
+
+## Waiting Strategies
+
+### Auto-Waiting is Built-In
+
+Most Playwright actions automatically wait:
+
+```python
+# These all auto-wait for the element to be ready
+page.click("button")  # Waits for: visible, stable, enabled
+page.fill("input", "text")  # Waits for: visible, enabled
+page.select_option("select", "value")  # Waits for: visible, enabled
+```
+
+### Explicit Waits (When Needed)
+
+<CodeGroup>
+```python Wait for Selector
+# Wait for element to appear
+page.wait_for_selector(".modal", state="visible")
+
+# Wait for element to disappear
+page.wait_for_selector(".loading", state="hidden")
+
+# Wait with timeout
+page.wait_for_selector(".slow-element", timeout=10000)
+```
+
+```python Wait for Load State
+# Wait for DOMContentLoaded
+page.wait_for_load_state("domcontentloaded")
+
+# Wait for full load
+page.wait_for_load_state("load")
+
+# Wait for network idle
+page.wait_for_load_state("networkidle")
+```
+
+```python Wait for Function
+# Wait for custom condition
+page.wait_for_function("() => window.dataLoaded === true")
+
+# Wait for element count
+page.wait_for_function(
+    "() => document.querySelectorAll('.item').length > 5"
+)
+```
+
+```python Wait for URL
+# Wait for URL change
+page.wait_for_url("**/dashboard")
+
+# Wait for URL pattern
+page.wait_for_url("**/**/profile/**")
+```
+</CodeGroup>
+
+<Warning>
+Avoid `page.wait_for_timeout()` - it's a hard wait and makes tests slower. Use conditional waits instead.
+</Warning>
+
+## File Downloads and Uploads
+
+### Handling Downloads
+
+```python
+from playwright.sync_api import Page
+
+def test_download_file(page: Page):
+    page.goto("https://example.com/downloads")
+    
+    # Method 1: Using expect_download context manager
+    with page.expect_download() as download_info:
+        page.get_by_role("link", name="Download").click()
+    
+    download = download_info.value
+    
+    # Save with custom name
+    download.save_as("my_file.pdf")
+    
+    # Get suggested filename
+    print(f"Downloaded: {download.suggested_filename}")
+    
+    # Get path
+    path = download.path()
+    print(f"Saved to: {path}")
+```
+
+### Handling Uploads
+
+```python
+def test_file_upload(page: Page):
+    page.goto("https://example.com/upload")
+    
+    # Upload single file
+    page.get_by_label("Upload file").set_input_files("test_file.pdf")
+    
+    # Upload multiple files
+    page.locator("input[type='file']").set_input_files([
+        "file1.pdf",
+        "file2.pdf",
+        "file3.pdf"
+    ])
+    
+    # Clear file input
+    page.locator("input[type='file']").set_input_files([])
+```
+
+## Device Emulation
+
+### Test Mobile Devices
+
+```python
+import pytest
+from playwright.sync_api import Browser
+
+@pytest.fixture
+def mobile_page(browser: Browser):
+    # iPhone 13 emulation
+    iphone_13 = browser.devices["iPhone 13"]
+    context = browser.new_context(**iphone_13)
+    page = context.new_page()
+    
+    yield page
+    
+    context.close()
+
+def test_mobile_layout(mobile_page):
+    mobile_page.goto("https://example.com")
+    
+    # Test mobile-specific elements
+    menu_button = mobile_page.get_by_role("button", name="Menu")
+    assert menu_button.is_visible()
+```
+
+### Popular Device Presets
+
+<Tabs>
+  <Tab title="iPhone">
+    ```python
+    # iPhone 13
+    context = browser.new_context(**browser.devices["iPhone 13"])
+    
+    # iPhone 13 Pro
+    context = browser.new_context(**browser.devices["iPhone 13 Pro"])
+    
+    # iPhone SE
+    context = browser.new_context(**browser.devices["iPhone SE"])
+    ```
+  </Tab>
+
+  <Tab title="iPad">
+    ```python
+    # iPad Pro
+    context = browser.new_context(**browser.devices["iPad Pro"])
+    
+    # iPad Mini
+    context = browser.new_context(**browser.devices["iPad Mini"])
+    
+    # iPad (gen 7)
+    context = browser.new_context(**browser.devices["iPad (gen 7)"])
+    ```
+  </Tab>
+
+  <Tab title="Android">
+    ```python
+    # Pixel 5
+    context = browser.new_context(**browser.devices["Pixel 5"])
+    
+    # Galaxy S9+
+    context = browser.new_context(**browser.devices["Galaxy S9+"])
+    
+    # Galaxy Tab S4
+    context = browser.new_context(**browser.devices["Galaxy Tab S4"])
+    ```
+  </Tab>
+
+  <Tab title="Custom">
+    ```python
+    # Custom device configuration
+    context = browser.new_context(
+        viewport={"width": 375, "height": 667},
+        user_agent="Custom User Agent",
+        device_scale_factor=2,
+        is_mobile=True,
+        has_touch=True,
+    )
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+Full list of device descriptors: [Playwright Device Descriptors](https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/server/deviceDescriptorsSource.json)
+</Note>
+
+## Authentication State Management
+
+### Save and Reuse Authentication
+
+```python
+import pytest
+from playwright.sync_api import Page, BrowserContext
+
+# Save authentication state once
+def test_save_auth_state(page: Page, context: BrowserContext):
+    page.goto("https://example.com/login")
+    
+    page.get_by_label("Email").fill("test@example.com")
+    page.get_by_label("Password").fill("password123")
+    page.get_by_role("button", name="Login").click()
+    
+    # Wait for login to complete
+    page.wait_for_url("**/dashboard")
+    
+    # Save authentication state
+    context.storage_state(path="auth/state.json")
+
+# Reuse authentication in other tests
+@pytest.fixture
+def authenticated_page(browser):
+    context = browser.new_context(storage_state="auth/state.json")
+    page = context.new_page()
+    yield page
+    context.close()
+
+def test_with_auth(authenticated_page):
+    # Already logged in!
+    authenticated_page.goto("https://example.com/profile")
+    # Test authenticated features...
+```
+
+### Global Authentication Setup
+
+```python
+# conftest.py
+import pytest
+import os
+
+@pytest.fixture(scope="session")
+def auth_state(browser):
+    """Set up authentication once for entire session."""
+    if os.path.exists("auth/state.json"):
+        # Reuse existing auth
+        return "auth/state.json"
+    
+    # Create auth state
+    context = browser.new_context()
+    page = context.new_page()
+    
+    page.goto("https://example.com/login")
+    page.fill("#email", "test@example.com")
+    page.fill("#password", "password123")
+    page.click("button[type=submit]")
+    page.wait_for_url("**/dashboard")
+    
+    context.storage_state(path="auth/state.json")
+    context.close()
+    
+    return "auth/state.json"
+
+@pytest.fixture
+def authenticated_context(browser, auth_state):
+    context = browser.new_context(storage_state=auth_state)
+    yield context
+    context.close()
+```
+
+## Screenshots and Videos
+
+### Smart Screenshot Strategy
+
+```python
+import pytest
+from playwright.sync_api import Page
+
+@pytest.fixture
+def screenshot_on_failure(page: Page, request):
+    """Take screenshot only on test failure."""
+    yield
+    
+    if request.node.rep_call.failed:
+        screenshot_path = f"screenshots/{request.node.name}.png"
+        page.screenshot(path=screenshot_path, full_page=True)
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, f"rep_{rep.when}", rep)
+
+def test_example(page: Page, screenshot_on_failure):
+    page.goto("https://example.com")
+    # Test logic...
+```
+
+### Screenshot Options
+
+```python
+# Full page screenshot
+page.screenshot(path="fullpage.png", full_page=True)
+
+# Element screenshot
+element = page.locator(".component")
+element.screenshot(path="component.png")
+
+# Screenshot with mask
+page.screenshot(
+    path="masked.png",
+    mask=[page.locator(".sensitive-data")]
+)
+
+# Screenshot in different formats
+page.screenshot(path="image.png", type="png")
+page.screenshot(path="image.jpg", type="jpeg", quality=80)
+```
+
+## Browser Context Tips
+
+### Isolate Tests with Contexts
+
+```python
+import pytest
+from playwright.sync_api import Browser
+
+@pytest.fixture
+def isolated_context(browser: Browser):
+    """Each test gets fresh browser context."""
+    context = browser.new_context(
+        viewport={"width": 1280, "height": 720},
+        locale="en-US",
+        timezone_id="America/New_York",
+    )
+    yield context
+    context.close()
+```
+
+### Context Options
+
+```python
+context = browser.new_context(
+    # Viewport
+    viewport={"width": 1920, "height": 1080},
+    
+    # Locale and timezone
+    locale="en-US",
+    timezone_id="America/Los_Angeles",
+    
+    # Geolocation
+    geolocation={"latitude": 37.7749, "longitude": -122.4194},
+    permissions=["geolocation"],
+    
+    # Ignore HTTPS errors
+    ignore_https_errors=True,
+    
+    # User agent
+    user_agent="Custom User Agent",
+    
+    # Extra HTTP headers
+    extra_http_headers={
+        "X-Custom-Header": "value"
+    },
+)
+```
+
+## Debugging Tips
+
+### Use page.pause() for Interactive Debugging
+
+```python
+def test_debug_mode(page: Page):
+    page.goto("https://example.com")
+    
+    # Test will pause here - Playwright Inspector opens
+    page.pause()
+    
+    # Continue testing after inspection
+    page.click("button")
+```
+
+### Enable Debug Mode
+
+```bash
+# Run with Playwright Inspector
+PWDEBUG=1 pytest test_file.py
+
+# Run headed (see the browser)
+pytest test_file.py --headed
+
+# Slow down execution
+pytest test_file.py --slowmo 1000
+```
+
+### Verbose Logging
+
+```python
+import pytest
+from playwright.sync_api import Browser
+
+@pytest.fixture
+def debug_context(browser: Browser):
+    context = browser.new_context()
+    
+    # Log all network requests
+    def log_request(request):
+        print(f">> {request.method} {request.url}")
+    
+    def log_response(response):
+        print(f"<< {response.status} {response.url}")
+    
+    context.on("request", log_request)
+    context.on("response", log_response)
+    
+    yield context
+    context.close()
+```
+
+## Network Interception
+
+### Mock API Responses
+
+```python
+def test_mock_api(page: Page):
+    # Mock successful response
+    def handle_route(route):
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body='{"status": "success", "data": {"id": 1}}'
+        )
+    
+    page.route("**/api/users", handle_route)
+    
+    page.goto("https://example.com")
+    # API call will return mocked data
+```
+
+### Modify Requests
+
+```python
+def test_modify_request(page: Page):
+    def modify_request(route):
+        # Get original request
+        request = route.request
+        
+        # Modify headers
+        headers = {**request.headers, "X-Custom": "value"}
+        
+        # Continue with modifications
+        route.continue_(headers=headers)
+    
+    page.route("**/*", modify_request)
+    page.goto("https://example.com")
+```
+
+### Block Requests
+
+```python
+def test_block_requests(page: Page):
+    # Block analytics
+    page.route("**/*analytics*", lambda route: route.abort())
+    
+    # Block by resource type
+    page.route("**/*", lambda route: 
+        route.abort() if route.request.resource_type == "image"
+        else route.continue_()
+    )
+    
+    page.goto("https://example.com")
+```
+
+## Keyboard and Mouse Actions
+
+### Keyboard Shortcuts
+
+```python
+# Single key
+page.keyboard.press("Enter")
+page.keyboard.press("Escape")
+
+# Key combinations
+page.keyboard.press("Control+A")
+page.keyboard.press("Control+C")
+page.keyboard.press("Meta+V")  # Command on Mac
+
+# Type text
+page.keyboard.type("Hello World", delay=100)
+
+# Hold and release
+page.keyboard.down("Shift")
+page.keyboard.press("A")
+page.keyboard.up("Shift")
+```
+
+### Mouse Actions
+
+```python
+# Click at coordinates
+page.mouse.click(100, 200)
+
+# Double click
+page.mouse.dblclick(100, 200)
+
+# Right click
+page.mouse.click(100, 200, button="right")
+
+# Drag and drop
+page.mouse.move(100, 100)
+page.mouse.down()
+page.mouse.move(200, 200)
+page.mouse.up()
+
+# Hover
+element = page.locator(".tooltip-trigger")
+element.hover()
+```
+
+## Working with Multiple Tabs
+
+```python
+def test_multiple_tabs(page: Page, context):
+    page.goto("https://example.com")
+    
+    # Click link that opens new tab
+    with context.expect_page() as new_page_info:
+        page.get_by_text("Open in new tab").click()
+    
+    new_page = new_page_info.value
+    new_page.wait_for_load_state()
+    
+    # Work with new tab
+    assert "New Tab Title" in new_page.title()
+    
+    # Switch back to original tab
+    page.bring_to_front()
+    
+    # Close new tab
+    new_page.close()
+```
+
+## Working with Frames and iFrames
+
+```python
+def test_iframe(page: Page):
+    page.goto("https://example.com")
+    
+    # Get frame by name or URL
+    frame = page.frame("frame-name")
+    # or
+    frame = page.frame_locator("iframe[title='My Frame']")
+    
+    # Interact with elements in frame
+    frame.locator("button").click()
+    frame.get_by_text("Click me").click()
+    
+    # Chain frame locators
+    page.frame_locator("iframe").frame_locator("iframe").locator("button").click()
+```
+
+## Best Practices Summary
+
+<CardGroup cols={2}>
+  <Card title="Locators" icon="crosshairs">
+    - Use role-based locators first
+    - Avoid CSS selectors when possible
+    - Chain locators to narrow scope
+    - Use test IDs for dynamic content
+  </Card>
+  
+  <Card title="Assertions" icon="check-circle">
+    - Use `expect()` not `assert`
+    - Let Playwright auto-wait
+    - Test positive and negative cases
+    - Verify multiple properties
+  </Card>
+  
+  <Card title="Waits" icon="hourglass">
+    - Trust auto-waiting
+    - Use explicit waits for dynamic content
+    - Avoid hard timeouts
+    - Wait for network idle when needed
+  </Card>
+  
+  <Card title="Organization" icon="folder-tree">
+    - Isolate tests with contexts
+    - Reuse auth state
+    - Use fixtures for common setup
+    - Keep tests independent
+  </Card>
+</CardGroup>
+
+## Common Pitfalls to Avoid
+
+<Warning>
+**Don't Do This:**
+- Using `time.sleep()` - use Playwright's waits instead
+- Testing against production - use test environments
+- Hardcoding sensitive data - use environment variables
+- Making tests dependent on each other
+- Using overly specific selectors that break easily
+- Ignoring test failures in CI/CD
+</Warning>
+
+<Tip>
+**Do This Instead:**
+- Use `page.wait_for_selector()` or `expect()`
+- Set up dedicated test environments
+- Store credentials in `.env` files
+- Make each test independent and isolated
+- Use semantic locators (role, label, text)
+- Investigate and fix failures immediately
+</Tip>
+
+## Quick Reference Commands
+
+```bash
+# Run tests
+pytest                                    # All tests
+pytest test_file.py                      # Single file
+pytest test_file.py::test_name          # Single test
+pytest -k "login"                        # Tests matching pattern
+
+# Debugging
+PWDEBUG=1 pytest                        # With inspector
+pytest --headed                          # Show browser
+pytest --slowmo 1000                    # Slow down
+
+# Parallel execution
+pytest -n auto                          # Use all cores
+pytest -n 4                             # Use 4 workers
+
+# Reports
+pytest --html=report.html               # HTML report
+pytest --junit-xml=report.xml          # JUnit XML
+pytest --durations=10                   # Slowest tests
+
+# Tracing and screenshots
+pytest --tracing on                     # Enable tracing
+pytest --screenshot on                  # Take screenshots
+pytest --video on                       # Record videos
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Page Object Model" icon="file-code" href="/guides/page-object-model">
+    Structure your tests with page objects
+  </Card>
+  
+  <Card title="API Testing" icon="globe" href="/guides/api-testing">
+    Test REST APIs with Playwright
+  </Card>
+  
+  <Card title="Optimization" icon="gauge-high" href="/guides/optimization">
+    Speed up your test execution
+  </Card>
+  
+  <Card title="BDD" icon="book-open" href="/guides/bdd">
+    Write tests in natural language
+  </Card>
+</CardGroup>

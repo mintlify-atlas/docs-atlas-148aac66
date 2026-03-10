@@ -1,0 +1,373 @@
+---
+title: 'UI Testing Playground Examples'
+description: 'Master challenging UI automation scenarios with real-world examples from the UI Testing Playground'
+icon: 'code'
+---
+
+## Overview
+
+The [UI Testing Playground](http://uitestingplayground.com/) is a comprehensive resource designed to help you practice common automation challenges. These examples demonstrate how Playwright handles dynamic elements, visibility states, timing issues, and complex UI interactions.
+
+## What You'll Learn
+
+<CardGroup cols={2}>
+  <Card title="Dynamic Elements" icon="shuffle">
+    Handle elements with changing IDs and attributes
+  </Card>
+  <Card title="Visibility Testing" icon="eye">
+    Test different CSS visibility states and element detection
+  </Card>
+  <Card title="Timing & Waits" icon="clock">
+    Deal with load delays and progress indicators
+  </Card>
+  <Card title="Complex Tables" icon="table">
+    Extract and validate data from dynamic tables
+  </Card>
+</CardGroup>
+
+## Key Examples
+
+### Dynamic ID Challenge
+
+Elements with dynamically generated IDs can break traditional selectors. Playwright's role-based locators solve this elegantly.
+
+```python
+from playwright.sync_api import Page, expect
+
+
+def test_dynamic_id(page: Page):
+    page.goto("http://uitestingplayground.com/dynamicid")
+
+    button = page.get_by_role(
+        "button", name="Button with Dynamic ID"
+    )
+    expect(button).to_be_visible()
+
+    button.click()
+```
+
+**Key Takeaways:**
+- Use `get_by_role()` instead of CSS selectors with IDs
+- Role-based locators are resilient to DOM changes
+- Playwright automatically waits for element to be actionable
+
+### Text Input and Button Update
+
+Test form inputs and verify that UI updates reflect user actions.
+
+```python
+from playwright.sync_api import Page, expect
+
+
+def test_text_input(page: Page):
+    page.goto("http://uitestingplayground.com/textinput")
+    # text input value
+    great_stuff = "great stuff"
+    # fill value
+    input = page.get_by_label("Set New Button Name")
+    input.fill(great_stuff)
+    # click button
+    btn = page.locator("button.btn-primary")
+    btn.click()
+    # expect button text to be input value
+    expect(btn).to_have_text(great_stuff)
+```
+
+**Key Takeaways:**
+- Use `get_by_label()` for accessible form field selection
+- `fill()` method handles clearing and typing
+- Web-first assertions with `to_have_text()` auto-wait for updates
+
+### Load Delay Handling
+
+Navigate through pages and handle elements that appear after delays.
+
+```python
+from playwright.sync_api import Page, expect
+
+
+def test_load_delay(page: Page):
+    page.goto("http://uitestingplayground.com/")
+
+    load_delay_link = page.get_by_role("link", name="Load Delay")
+    load_delay_link.click()
+
+    btn = page.get_by_role("button", name="Button Appearing After Delay")
+    btn.wait_for()
+
+    expect(btn).to_be_visible()
+```
+
+**Key Takeaways:**
+- Playwright automatically waits for navigation to complete
+- Use `wait_for()` for explicit waiting when needed
+- Most assertions include built-in waiting
+
+### Progress Bar Monitoring
+
+Track dynamic progress indicators and stop at specific thresholds.
+
+```python
+from playwright.sync_api import Page
+
+
+def test_progressbar(page: Page):
+    page.goto("http://uitestingplayground.com/progressbar")
+
+    progressbar = page.get_by_role("progressbar")
+
+    start_btn = page.get_by_role("button", name="Start")
+    stop_btn = page.get_by_role("button", name="Stop")
+
+    # start progress
+    start_btn.click()
+
+    # check progress
+    while True:
+        valuenow = int(progressbar.get_attribute("aria-valuenow"))
+        print(f"Percent: {valuenow}%")
+
+        # progress more than or equal to 75
+        if valuenow >= 75:
+            break
+
+    # stop progress
+    stop_btn.click()
+
+    assert valuenow >= 75
+```
+
+**Key Takeaways:**
+- Use ARIA attributes for semantic element identification
+- `get_attribute()` retrieves dynamic values
+- Combine polling with precise timing control
+
+### Sample App Login Testing
+
+Comprehensive login flow testing with both success and failure scenarios.
+
+<Steps>
+  <Step title="Setup Test Fixture">
+    Use `autouse=True` to automatically navigate to the test page before each test.
+    
+    ```python
+    import pytest
+    from playwright.sync_api import Page, expect
+
+
+    @pytest.fixture(autouse=True)
+    def visit_test_page(page: Page):
+        page.goto("http://uitestingplayground.com/sampleapp")
+    ```
+  </Step>
+  
+  <Step title="Test Successful Login">
+    Verify the happy path with valid credentials.
+    
+    ```python
+    def test_successful_login(page: Page):
+        username = "dan"
+        password = "pwd"
+
+        username_input = page.get_by_placeholder("User Name")
+        password_input = page.get_by_placeholder("********")
+
+        login_btn = page.get_by_role("button", name="Log In")
+
+        username_input.fill(username)
+        password_input.fill(password)
+
+        login_btn.click()
+
+        label = page.locator("label#loginstatus")
+
+        expect(label).to_have_text(f"Welcome, {username}!")
+    ```
+  </Step>
+  
+  <Step title="Test Failed Login">
+    Verify error handling with invalid credentials.
+    
+    ```python
+    def test_failed_login(page: Page):
+        username = "dan"
+        password = "cnasdjc"
+
+        username_input = page.get_by_placeholder("User Name")
+        password_input = page.get_by_placeholder("********")
+
+        login_btn = page.get_by_role("button", name="Log In")
+
+        username_input.fill(username)
+        password_input.fill(password)
+
+        login_btn.click()
+
+        label = page.locator("label#loginstatus")
+
+        expect(label).to_have_text("Invalid username/password")
+    ```
+  </Step>
+</Steps>
+
+**Key Takeaways:**
+- `autouse=True` fixtures run automatically before each test
+- Test both success and failure paths
+- Use `get_by_placeholder()` for form field identification
+
+### Dynamic Table Data Extraction
+
+Extract and validate data from tables with dynamic structures.
+
+```python
+from playwright.sync_api import Page, expect
+
+
+def test_dynamic_table(page: Page):
+    page.goto("http://uitestingplayground.com/dynamictable")
+    
+    # given chrome CPU value
+    label = page.locator("p.bg-warning").inner_text()
+    percentage = label.split()[-1]
+
+    # locate all column headers
+    column_headers = page.get_by_role("columnheader")
+    cpu_column = None
+
+    # find column header with "CPU"
+    for index in range(column_headers.count()):
+        column_header = column_headers.nth(index)
+
+        if column_header.inner_text() == "CPU":
+            cpu_column = index
+            break
+    
+    # make sure CPU column is found
+    assert cpu_column != None
+
+    # second rowgroup with values
+    rowgroup = page.get_by_role("rowgroup").last
+    # row with "Chrome" value
+    chrome_row = rowgroup.get_by_role("row").filter(
+        has_text="Chrome"
+    )
+    # cell with cpu value
+    chrome_cpu = chrome_row.get_by_role("cell").nth(cpu_column)
+
+    # expect given cpu value to match cell value
+    expect(chrome_cpu).to_have_text(percentage)
+```
+
+**Key Takeaways:**
+- Dynamically locate columns by header text
+- Use `filter()` to narrow down row selection
+- Chain role-based locators for precise table navigation
+- `nth()` accesses specific elements in collections
+
+### Comprehensive Visibility Testing
+
+Test various CSS visibility states and element hiding techniques.
+
+```python
+import pytest
+from playwright.sync_api import Page, expect, TimeoutError
+
+
+def test_visibility(page: Page):
+    page.goto("http://uitestingplayground.com/visibility")
+
+    # Hide button
+    hide_button = page.get_by_role("button", name="Hide")
+
+    # other buttons
+    removed_button = page.get_by_role("button", name="Removed")
+    zero_width_button = page.get_by_role("button", name="Zero Width")
+    overlapped_button = page.get_by_role("button", name="Overlapped")
+    opacity_0_button = page.get_by_role("button", name="Opacity 0")
+    hidden_button = page.get_by_role("button", name="Visibility Hidden")
+    display_none_button = page.get_by_role("button", name="Display None")
+    offscreen_button = page.get_by_role("button", name="Offscreen")
+
+    # hide all the buttons
+    hide_button.click()
+
+    # removed from dom
+    expect(removed_button).to_be_hidden()
+
+    # zero width/height
+    expect(zero_width_button).to_have_css("width", "0px")
+
+    # overlapped by other element
+    with pytest.raises(TimeoutError):
+        overlapped_button.click(timeout=2000)
+
+    # opacity set to 0
+    expect(opacity_0_button).to_have_css("opacity", "0")
+
+    # visibility set to hidden
+    expect(hidden_button).to_be_hidden()
+
+    # display set to none
+    expect(display_none_button).to_be_hidden()
+
+    # moved offscreen
+    expect(offscreen_button).not_to_be_in_viewport()
+```
+
+**Key Takeaways:**
+- `to_be_hidden()` checks DOM presence and visibility
+- `to_have_css()` validates specific CSS properties
+- `not_to_be_in_viewport()` tests scroll position
+- Use `pytest.raises()` to test expected failures
+
+## Running the Tests
+
+<CodeGroup>
+```bash pytest
+# Run all UI Testing Playground tests
+pytest test_*.py
+
+# Run specific test
+pytest test_dynamic_table.py
+
+# Run with headed browser
+pytest --headed test_visibility.py
+
+# Run with specific browser
+pytest --browser firefox test_sample_app.py
+```
+
+```bash standalone
+# Run standalone scripts (non-pytest)
+python 66-dynamic-id.py
+python 76-progress-bar.py
+```
+</CodeGroup>
+
+## Common Patterns
+
+<Note>
+**Best Practices from UI Testing Playground:**
+
+1. **Prefer Role-Based Locators**: Use `get_by_role()`, `get_by_label()`, `get_by_placeholder()` over CSS selectors
+2. **Leverage Auto-Waiting**: Playwright waits for elements to be actionable before interacting
+3. **Use Web-First Assertions**: `expect()` assertions retry until conditions are met
+4. **Test Multiple Scenarios**: Include both success and failure cases
+5. **Handle Dynamic Content**: Use semantic locators that don't rely on IDs or dynamic attributes
+</Note>
+
+<Warning>
+**Common Pitfalls:**
+
+- Don't use brittle CSS selectors based on dynamic IDs
+- Avoid hard-coded waits with `time.sleep()` - use Playwright's auto-waiting
+- Don't assume elements are immediately visible after navigation
+- Test visibility states thoroughly - elements can be hidden in multiple ways
+</Warning>
+
+## Additional Resources
+
+- [UI Testing Playground Website](http://uitestingplayground.com/)
+- [Playwright Locators Documentation](https://playwright.dev/python/docs/locators)
+- [Web-First Assertions Guide](https://playwright.dev/python/docs/test-assertions)
+- [Auto-Waiting Mechanisms](https://playwright.dev/python/docs/actionability)

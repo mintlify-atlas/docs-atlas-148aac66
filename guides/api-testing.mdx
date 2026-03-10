@@ -1,0 +1,636 @@
+---
+title: API Testing
+description: Learn how to test REST APIs using Playwright's APIRequestContext in Python for comprehensive API validation
+---
+
+## Overview
+
+Playwright provides a powerful `APIRequestContext` for testing REST APIs. Unlike traditional HTTP libraries, Playwright's API testing features are integrated with the browser context, making it easy to combine UI and API testing.
+
+<Note>
+Playwright's API testing capabilities allow you to test APIs independently or in combination with UI tests, sharing authentication and cookies between both.
+</Note>
+
+## Why Use Playwright for API Testing?
+
+<CardGroup cols={2}>
+  <Card title="Unified Testing" icon="layer-group">
+    Combine UI and API tests in a single framework
+  </Card>
+  <Card title="Shared Context" icon="share-nodes">
+    Share authentication and state between UI and API
+  </Card>
+  <Card title="Easy Mocking" icon="wand-magic-sparkles">
+    Mock API responses for UI tests
+  </Card>
+  <Card title="Built-in Fixtures" icon="toolbox">
+    Works seamlessly with pytest fixtures
+  </Card>
+</CardGroup>
+
+## Basic API Testing
+
+### Method 1: Using Page.goto()
+
+The simplest approach for basic API testing:
+
+```python
+from playwright.sync_api import Page
+
+def test_users_api(page: Page):
+    response = page.goto("https://dummyjson.com/users/1")
+
+    user_data = response.json()
+
+    assert "firstName" in user_data
+    assert "lastName" in user_data
+
+    assert user_data["firstName"] == "Terry"
+    assert user_data["lastName"] == "Medhurst"
+```
+
+<Warning>
+This method is limited to GET requests and doesn't provide dedicated API testing features. Use `APIRequestContext` for comprehensive API testing.
+</Warning>
+
+## Using APIRequestContext
+
+### Method 2: Direct API Context
+
+Create an API context directly from the Playwright instance:
+
+```python
+from playwright.sync_api import Playwright
+
+def test_users_api(playwright: Playwright):
+    api_context = playwright.request.new_context(
+        base_url="https://dummyjson.com"
+    )
+
+    response = api_context.get("/users/1")
+
+    user_data = response.json()
+
+    assert "firstName" in user_data
+    assert "lastName" in user_data
+
+    assert user_data["firstName"] == "Terry"
+    assert user_data["lastName"] == "Medhurst"
+```
+
+<Tip>
+Always set a `base_url` to avoid repeating the domain in every request.
+</Tip>
+
+## Creating API Context Fixtures
+
+For reusable API testing, create a pytest fixture:
+
+```python
+import pytest
+from playwright.sync_api import Playwright, APIRequestContext
+
+@pytest.fixture
+def api_context(playwright: Playwright) -> APIRequestContext:
+    api_context = playwright.request.new_context(
+        base_url="https://dummyjson.com"
+    )
+    yield api_context
+    api_context.dispose()
+
+def test_users_search(api_context: APIRequestContext):
+    query = "John"
+    response = api_context.get(f"/users/search?q={query}")
+
+    users_data = response.json()
+
+    print("Users found:", users_data["total"])
+
+    for user in users_data["users"]:
+        print("Checking user:", user["firstName"])
+        assert query in user["firstName"]
+```
+
+<Note>
+Always call `api_context.dispose()` to clean up resources properly.
+</Note>
+
+## HTTP Methods
+
+<Tabs>
+  <Tab title="GET">
+    ```python
+    def test_get_user(api_context: APIRequestContext):
+        response = api_context.get("/users/1")
+        
+        assert response.ok
+        assert response.status == 200
+        
+        user = response.json()
+        assert user["id"] == 1
+    ```
+  </Tab>
+
+  <Tab title="POST">
+    ```python
+    def test_create_user(api_context: APIRequestContext):
+        response = api_context.post(
+            "/users/add",
+            data={
+                "firstName": "Damien",
+                "lastName": "Smith",
+                "age": 27
+            }
+        )
+        
+        assert response.ok
+        user_data = response.json()
+        
+        assert user_data["id"] == 101
+        assert user_data["firstName"] == "Damien"
+    ```
+  </Tab>
+
+  <Tab title="PUT">
+    ```python
+    def test_update_user(api_context: APIRequestContext):
+        response = api_context.put(
+            "/users/1",
+            data={
+                "lastName": "Smith",
+                "age": 20,
+            }
+        )
+        
+        assert response.ok
+        user_data = response.json()
+        
+        assert user_data["lastName"] == "Smith"
+        assert user_data["age"] == 20
+    ```
+  </Tab>
+
+  <Tab title="DELETE">
+    ```python
+    def test_remove_user(api_context: APIRequestContext):
+        response = api_context.delete("/users/1")
+        
+        assert response.ok
+        user_data = response.json()
+        
+        assert user_data["isDeleted"]
+    ```
+  </Tab>
+</Tabs>
+
+## Complete CRUD Example
+
+```python
+import pytest
+from playwright.sync_api import Playwright, APIRequestContext
+
+@pytest.fixture
+def api_context(playwright: Playwright) -> APIRequestContext:
+    api_context = playwright.request.new_context(
+        base_url="https://dummyjson.com",
+        extra_http_headers={'Content-Type': 'application/json'},
+    )
+    yield api_context
+    api_context.dispose()
+
+def test_create_user(api_context: APIRequestContext):
+    """Test POST request - Create"""
+    response = api_context.post(
+        "users/add",
+        data={
+            "firstName": "Damien",
+            "lastName": "Smith",
+            "age": 27
+        }
+    )
+    user_data = response.json()
+
+    assert user_data["id"] == 101
+    assert user_data["firstName"] == "Damien"
+
+def test_read_user(api_context: APIRequestContext):
+    """Test GET request - Read"""
+    response = api_context.get("users/1")
+    
+    assert response.ok
+    assert response.status == 200
+    
+    user_data = response.json()
+    assert user_data["firstName"] == "Terry"
+
+def test_update_user(api_context: APIRequestContext):
+    """Test PUT request - Update"""
+    response = api_context.put(
+        "users/1",
+        data={
+            "lastName": "Smith",
+            "age": 20,
+        }
+    )
+    user_data = response.json()
+
+    assert user_data["lastName"] == "Smith"
+    assert user_data["age"] == 20
+
+def test_remove_user(api_context: APIRequestContext):
+    """Test DELETE request - Delete"""
+    response = api_context.delete("users/1")
+
+    user_data = response.json()
+
+    assert user_data["isDeleted"]
+```
+
+## Setting Headers
+
+### Global Headers
+
+Set headers for all requests:
+
+```python
+@pytest.fixture
+def api_context(playwright: Playwright) -> APIRequestContext:
+    return playwright.request.new_context(
+        base_url="https://api.example.com",
+        extra_http_headers={
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer YOUR_TOKEN',
+            'Accept': 'application/json'
+        }
+    )
+```
+
+### Per-Request Headers
+
+```python
+def test_with_custom_headers(api_context: APIRequestContext):
+    response = api_context.get(
+        "/users/1",
+        headers={
+            'X-Custom-Header': 'custom-value',
+            'Accept-Language': 'en-US'
+        }
+    )
+    assert response.ok
+```
+
+## Authentication
+
+### Bearer Token Authentication
+
+```python
+import pytest
+from playwright.sync_api import Playwright, APIRequestContext
+
+@pytest.fixture
+def authenticated_api(playwright: Playwright) -> APIRequestContext:
+    # First, get the token
+    auth_context = playwright.request.new_context(
+        base_url="https://api.example.com"
+    )
+    
+    login_response = auth_context.post(
+        "/auth/login",
+        data={
+            "username": "testuser",
+            "password": "testpass"
+        }
+    )
+    
+    token = login_response.json()["token"]
+    auth_context.dispose()
+    
+    # Create authenticated context
+    api_context = playwright.request.new_context(
+        base_url="https://api.example.com",
+        extra_http_headers={
+            'Authorization': f'Bearer {token}'
+        }
+    )
+    
+    yield api_context
+    api_context.dispose()
+
+def test_authenticated_request(authenticated_api: APIRequestContext):
+    response = authenticated_api.get("/user/profile")
+    assert response.ok
+```
+
+### Basic Authentication
+
+```python
+@pytest.fixture
+def basic_auth_api(playwright: Playwright) -> APIRequestContext:
+    import base64
+    
+    credentials = base64.b64encode(b"username:password").decode()
+    
+    return playwright.request.new_context(
+        base_url="https://api.example.com",
+        extra_http_headers={
+            'Authorization': f'Basic {credentials}'
+        }
+    )
+```
+
+## Response Validation
+
+### Status Codes
+
+```python
+def test_response_status(api_context: APIRequestContext):
+    response = api_context.get("/users/1")
+    
+    # Check if request was successful
+    assert response.ok
+    
+    # Check specific status code
+    assert response.status == 200
+    
+    # Check status text
+    assert response.status_text == "OK"
+```
+
+### Response Headers
+
+```python
+def test_response_headers(api_context: APIRequestContext):
+    response = api_context.get("/users/1")
+    
+    headers = response.headers
+    
+    assert headers["content-type"] == "application/json"
+    assert "etag" in headers
+```
+
+### JSON Response
+
+```python
+def test_json_response(api_context: APIRequestContext):
+    response = api_context.get("/users/1")
+    
+    data = response.json()
+    
+    # Validate structure
+    assert isinstance(data, dict)
+    assert "id" in data
+    assert "firstName" in data
+    
+    # Validate values
+    assert data["id"] == 1
+    assert isinstance(data["age"], int)
+    assert data["age"] > 0
+```
+
+### Schema Validation
+
+```python
+import pytest
+from playwright.sync_api import APIRequestContext
+
+def test_user_schema(api_context: APIRequestContext):
+    response = api_context.get("/users/1")
+    user = response.json()
+    
+    # Required fields
+    required_fields = ["id", "firstName", "lastName", "email", "age"]
+    for field in required_fields:
+        assert field in user, f"Missing required field: {field}"
+    
+    # Field types
+    assert isinstance(user["id"], int)
+    assert isinstance(user["firstName"], str)
+    assert isinstance(user["age"], int)
+    assert isinstance(user["email"], str)
+    
+    # Field constraints
+    assert user["age"] >= 0
+    assert "@" in user["email"]
+```
+
+## API Mocking
+
+Mock API responses for UI testing:
+
+```python
+from playwright.sync_api import Page, Route
+
+def on_api_call(route: Route):
+    """Intercept and modify API response."""
+    response = route.fetch()
+    user_data = response.json()
+
+    # Modify the response
+    user_data["lastName"] = "Smith"
+    user_data["age"] = 20
+
+    route.fulfill(
+        response=response,
+        json=user_data,
+    )
+
+def test_user_api(page: Page):
+    USERS_API_URL = "https://dummyjson.com/users/1"
+
+    # Set up the route before navigation
+    page.route(USERS_API_URL, on_api_call)
+
+    response = page.goto(USERS_API_URL)
+    data = response.json()
+    
+    # Verify mocked data
+    assert data["lastName"] == "Smith"
+    assert data["age"] == 20
+    print("Got data:", data)
+```
+
+### Mock Entire Response
+
+```python
+def test_mock_entire_response(page: Page):
+    def handle_route(route: Route):
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body='{"firstName": "John", "lastName": "Doe"}'
+        )
+    
+    page.route("**/api/users/**", handle_route)
+    
+    response = page.goto("https://api.example.com/api/users/1")
+    data = response.json()
+    
+    assert data["firstName"] == "John"
+```
+
+### Mock with Status Codes
+
+```python
+def test_mock_error_response(page: Page):
+    def handle_route(route: Route):
+        route.fulfill(
+            status=404,
+            content_type="application/json",
+            body='{"error": "User not found"}'
+        )
+    
+    page.route("**/api/users/999", handle_route)
+    
+    response = page.goto("https://api.example.com/api/users/999")
+    
+    assert response.status == 404
+    assert response.json()["error"] == "User not found"
+```
+
+## Combining UI and API Testing
+
+Test workflows that involve both UI and API:
+
+```python
+import pytest
+from playwright.sync_api import Page, APIRequestContext, Playwright
+
+@pytest.fixture
+def api_context(playwright: Playwright) -> APIRequestContext:
+    context = playwright.request.new_context(
+        base_url="https://dummyjson.com"
+    )
+    yield context
+    context.dispose()
+
+def test_create_user_via_api_verify_ui(page: Page, api_context: APIRequestContext):
+    # Create user via API
+    response = api_context.post(
+        "/users/add",
+        data={
+            "firstName": "John",
+            "lastName": "Doe",
+            "email": "john@example.com"
+        }
+    )
+    
+    user = response.json()
+    user_id = user["id"]
+    
+    # Verify in UI
+    page.goto(f"https://example.com/users/{user_id}")
+    assert page.locator("h1").inner_text() == "John Doe"
+    assert page.locator(".email").inner_text() == "john@example.com"
+```
+
+## Query Parameters
+
+```python
+def test_with_query_params(api_context: APIRequestContext):
+    # Method 1: In URL
+    response = api_context.get("/users/search?q=John&limit=5")
+    
+    # Method 2: Using params (cleaner)
+    response = api_context.get(
+        "/users/search",
+        params={
+            "q": "John",
+            "limit": 5,
+            "skip": 0
+        }
+    )
+    
+    users = response.json()
+    assert users["total"] > 0
+```
+
+## File Uploads
+
+```python
+def test_upload_file(api_context: APIRequestContext):
+    with open("test_file.txt", "rb") as f:
+        response = api_context.post(
+            "/upload",
+            multipart={
+                "file": {
+                    "name": "test_file.txt",
+                    "mimeType": "text/plain",
+                    "buffer": f.read()
+                }
+            }
+        )
+    
+    assert response.ok
+```
+
+## Best Practices
+
+<Warning>
+**Avoid These Mistakes:**
+- Don't forget to call `api_context.dispose()`
+- Don't hardcode API keys in test files
+- Don't test against production APIs
+- Don't ignore status code validation
+</Warning>
+
+<Tip>
+**Best Practices:**
+- Use fixtures for reusable API contexts
+- Set base URLs to avoid repetition
+- Validate response schemas, not just specific values
+- Use environment variables for API credentials
+- Test both success and error scenarios
+- Mock external APIs in UI tests
+- Combine API tests with UI tests for complete coverage
+</Tip>
+
+## Environment-Specific Configuration
+
+```python
+import pytest
+import os
+from playwright.sync_api import Playwright, APIRequestContext
+
+@pytest.fixture
+def api_context(playwright: Playwright) -> APIRequestContext:
+    env = os.getenv("TEST_ENV", "staging")
+    
+    base_urls = {
+        "staging": "https://staging-api.example.com",
+        "production": "https://api.example.com",
+        "local": "http://localhost:3000"
+    }
+    
+    api_context = playwright.request.new_context(
+        base_url=base_urls[env],
+        extra_http_headers={
+            'Authorization': f'Bearer {os.getenv("API_TOKEN")}'
+        }
+    )
+    
+    yield api_context
+    api_context.dispose()
+```
+
+Run tests:
+```bash
+TEST_ENV=staging API_TOKEN=your_token pytest
+```
+
+## When to Use API Testing
+
+<CardGroup cols={2}>
+  <Card title="✅ Use API Testing" icon="check">
+    - Testing backend logic independently
+    - Setting up test data quickly
+    - Validating API contracts
+    - Performance testing endpoints
+    - Testing authentication flows
+  </Card>
+  <Card title="✅ Combine with UI" icon="layer-group">
+    - Verify end-to-end workflows
+    - Set up data via API, test in UI
+    - Mock APIs for UI testing
+    - Test real-time updates
+  </Card>
+</CardGroup>

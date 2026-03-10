@@ -1,0 +1,432 @@
+---
+title: 'Your First Test'
+description: 'Create, run, and understand your first Playwright test with pytest'
+---
+
+## Introduction to Testing with Pytest
+
+While the quick start showed you how to automate browser tasks, real-world testing requires a proper testing framework. Pytest combined with pytest-playwright provides powerful fixtures, assertions, and test management.
+
+## Creating Your First Test
+
+<Steps>
+  <Step title="Create a Test File">
+    Pytest discovers test files that start with `test_` or end with `_test.py`. Create a file called `test_app.py`:
+
+    ```bash
+    touch test_app.py
+    ```
+
+    <Note>
+      Test file naming is important! Pytest will only discover files matching the pattern `test_*.py` or `*_test.py`.
+    </Note>
+  </Step>
+
+  <Step title="Write Your First Test">
+    Add the following test to `test_app.py`:
+
+    ```python test_app.py
+    from playwright.sync_api import Page
+
+    DOCS_URL = "https://playwright.dev/python/docs/intro"
+
+
+    def test_page_has_get_started_link(page: Page):
+        page.goto("https://playwright.dev/python")
+
+        link = page.get_by_role("link", name="GET STARTED")
+        link.click()
+
+        assert page.url == DOCS_URL
+    ```
+
+    <Tip>
+      Notice the `page: Page` parameter. This is a pytest fixture provided by pytest-playwright that automatically manages browser and page lifecycle.
+    </Tip>
+  </Step>
+
+  <Step title="Run the Test">
+    Execute your test with pytest:
+
+    ```bash
+    pytest test_app.py
+    ```
+
+    You should see output like:
+
+    ```bash
+    ======================== test session starts ========================
+    collected 1 item
+
+    test_app.py .                                              [100%]
+
+    ========================= 1 passed in 2.5s =========================
+    ```
+  </Step>
+</Steps>
+
+## Understanding the Test Structure
+
+### Test Function Naming
+
+```python
+def test_page_has_get_started_link(page: Page):
+```
+
+Test functions must start with `test_` for pytest to discover them. The name should describe what the test verifies.
+
+### The Page Fixture
+
+```python
+def test_page_has_get_started_link(page: Page):
+```
+
+The `page` parameter is a pytest fixture provided by pytest-playwright. It:
+
+- Automatically launches a browser
+- Creates a new page for each test
+- Closes the page and browser after the test
+- Provides isolation between tests
+
+<Note>
+  You don't need to manually create or close browsers when using the `page` fixture. Pytest-playwright handles it all!
+</Note>
+
+### Constants
+
+```python
+DOCS_URL = "https://playwright.dev/python/docs/intro"
+```
+
+Defining expected values as constants makes tests more readable and maintainable.
+
+### Assertions
+
+```python
+assert page.url == DOCS_URL
+```
+
+Simple Python assertions verify test expectations. If the assertion fails, pytest provides detailed error information.
+
+## Using Web-First Assertions
+
+Playwright provides powerful web-first assertions that automatically retry until conditions are met:
+
+```python test_with_expect.py
+from playwright.sync_api import Page, expect
+
+DOCS_URL = "https://playwright.dev/python/docs/intro"
+
+
+def test_get_started_link(page: Page):
+    page.goto("https://playwright.dev/python")
+
+    link = page.get_by_role("link", name="GET STARTED")
+    link.click()
+    
+    # assert statement
+    assert page.url == DOCS_URL
+    # expect page url
+    expect(page).to_have_url(DOCS_URL)
+    # expect page title
+    expect(page).to_have_title("Installation | Playwright Python")
+```
+
+### Why Use `expect()`?
+
+Compare these two approaches:
+
+<CodeGroup>
+```python Regular Assert (Not Recommended)
+# Fails immediately if condition isn't met
+assert page.get_by_text("Welcome").is_visible()
+```
+
+```python Web-First Assertion (Recommended)
+# Retries for up to 5 seconds until element is visible
+expect(page.get_by_text("Welcome")).to_be_visible()
+```
+</CodeGroup>
+
+<Warning>
+  Use `expect()` for assertions about UI state. It automatically retries and eliminates flaky tests caused by timing issues.
+</Warning>
+
+## Common Assertions
+
+Here are frequently used assertions:
+
+### Page Assertions
+
+```python
+# Check URL
+expect(page).to_have_url("https://example.com")
+expect(page).to_have_url(/.*docs.*/)
+
+# Check title
+expect(page).to_have_title("My Page Title")
+```
+
+### Element Assertions
+
+```python
+# Visibility
+expect(page.get_by_text("Welcome")).to_be_visible()
+expect(page.get_by_text("Loading...")).to_be_hidden()
+
+# Text content
+expect(page.get_by_role("heading")).to_have_text("Dashboard")
+expect(page.get_by_test_id("status")).to_contain_text("Success")
+
+# Element state
+expect(page.get_by_role("button", name="Submit")).to_be_enabled()
+expect(page.get_by_role("checkbox")).to_be_checked()
+
+# Attributes
+expect(page.get_by_role("link")).to_have_attribute("href", "/docs")
+```
+
+### Count Assertions
+
+```python
+# Check number of elements
+expect(page.get_by_role("listitem")).to_have_count(5)
+```
+
+## Running Tests with Different Options
+
+### Verbose Output
+
+See detailed test information:
+
+```bash
+pytest test_app.py -v
+```
+
+### Show Print Statements
+
+Display print output even when tests pass:
+
+```bash
+pytest test_app.py -s
+```
+
+### Run Specific Tests
+
+```bash
+# Run a specific test function
+pytest test_app.py::test_page_has_get_started_link
+
+# Run tests matching a pattern
+pytest -k "get_started"
+```
+
+### Run in Headed Mode
+
+See the browser during test execution:
+
+```bash
+pytest test_app.py --headed
+```
+
+### Slow Down Execution
+
+Add delay between operations:
+
+```bash
+pytest test_app.py --headed --slowmo 1000
+```
+
+### Run in Specific Browser
+
+```bash
+# Run in Firefox
+pytest test_app.py --browser firefox
+
+# Run in WebKit
+pytest test_app.py --browser webkit
+
+# Run in all browsers
+pytest test_app.py --browser chromium --browser firefox --browser webkit
+```
+
+## Writing Multiple Tests
+
+Create a test suite with multiple test cases:
+
+```python test_homepage.py
+from playwright.sync_api import Page, expect
+
+
+def test_homepage_title(page: Page):
+    page.goto("https://playwright.dev/python")
+    expect(page).to_have_title(/Playwright/)
+
+
+def test_get_started_button_visible(page: Page):
+    page.goto("https://playwright.dev/python")
+    get_started = page.get_by_role("link", name="GET STARTED")
+    expect(get_started).to_be_visible()
+
+
+def test_navigation_to_docs(page: Page):
+    page.goto("https://playwright.dev/python")
+    page.get_by_role("link", name="Docs").click()
+    expect(page).to_have_url(/.*docs.*/)
+
+
+def test_search_functionality(page: Page):
+    page.goto("https://playwright.dev/python")
+    search = page.get_by_placeholder("Search docs")
+    expect(search).to_be_visible()
+```
+
+Run all tests:
+
+```bash
+pytest test_homepage.py
+```
+
+## Test Configuration
+
+Create a `pytest.ini` file to configure pytest behavior:
+
+```ini pytest.ini
+[pytest]
+addopts = --headed --browser chromium --slowmo 500
+testpaths = tests
+python_files = test_*.py
+python_functions = test_*
+```
+
+Now you can simply run:
+
+```bash
+pytest
+```
+
+## Best Practices
+
+### Use Descriptive Test Names
+
+<CodeGroup>
+```python Bad
+def test_1(page: Page):
+    page.goto("https://example.com")
+    assert page.title()
+```
+
+```python Good
+def test_homepage_has_correct_title(page: Page):
+    page.goto("https://example.com")
+    expect(page).to_have_title("Example Domain")
+```
+</CodeGroup>
+
+### Use User-Facing Locators
+
+<CodeGroup>
+```python Bad (CSS Selectors)
+button = page.locator(".btn-primary#submit")
+```
+
+```python Good (Role-Based)
+button = page.get_by_role("button", name="Submit")
+```
+</CodeGroup>
+
+### Prefer Web-First Assertions
+
+<CodeGroup>
+```python Bad (Manual Waits)
+import time
+page.get_by_text("Login").click()
+time.sleep(2)
+assert page.url == "/dashboard"
+```
+
+```python Good (Auto-Waiting)
+page.get_by_text("Login").click()
+expect(page).to_have_url("/dashboard")
+```
+</CodeGroup>
+
+### Keep Tests Independent
+
+Each test should be able to run independently in any order:
+
+```python
+def test_login(page: Page):
+    # Don't rely on previous test state
+    page.goto("https://example.com/login")
+    # ... test login
+
+def test_dashboard(page: Page):
+    # Set up required state for this test
+    page.goto("https://example.com/login")
+    # ... login
+    page.goto("https://example.com/dashboard")
+    # ... test dashboard
+```
+
+<Tip>
+  Use pytest fixtures to share common setup logic between tests without creating dependencies.
+</Tip>
+
+## Debugging Failed Tests
+
+### Capture Screenshots on Failure
+
+Pytest-playwright automatically captures screenshots when tests fail. They're saved in `test-results/` directory.
+
+### Manual Screenshots
+
+Add screenshots during test execution:
+
+```python
+def test_checkout_flow(page: Page):
+    page.goto("https://example.com")
+    page.screenshot(path="before_checkout.png")
+    page.get_by_text("Checkout").click()
+    page.screenshot(path="after_checkout.png")
+```
+
+### Pause Execution
+
+Pause test execution to inspect the page:
+
+```python
+def test_debug(page: Page):
+    page.goto("https://example.com")
+    page.pause()  # Opens Playwright Inspector
+    page.get_by_text("Click me").click()
+```
+
+### Video Recording
+
+Enable video recording for tests:
+
+```bash
+pytest --video on
+```
+
+Videos are saved in `test-results/` directory.
+
+## Next Steps
+
+You've successfully created and run your first Playwright tests! Continue learning:
+
+<CardGroup cols={2}>
+  <Card title="Locators" icon="crosshairs" href="/concepts/locators">
+    Master advanced element location strategies
+  </Card>
+  <Card title="Assertions" icon="check" href="/concepts/web-first-assertions">
+    Deep dive into web-first assertions
+  </Card>
+  <Card title="Fixtures" icon="puzzle-piece" href="/concepts/fixtures">
+    Learn about browser and context fixtures
+  </Card>
+  <Card title="Page Object Model" icon="code" href="/guides/page-object-model">
+    Explore advanced testing patterns and techniques
+  </Card>
+</CardGroup>

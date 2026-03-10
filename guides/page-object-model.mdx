@@ -1,0 +1,254 @@
+---
+title: Page Object Model (POM)
+description: Learn how to implement the Page Object Model pattern in Playwright Python to create maintainable and reusable test code
+---
+
+## What is Page Object Model?
+
+The Page Object Model (POM) is a design pattern that creates an object repository for web UI elements. It helps reduce code duplication and improves test maintenance by separating page structure from test logic.
+
+<Note>
+POM encapsulates page-specific locators and actions into reusable classes, making your tests more readable and maintainable.
+</Note>
+
+## Why Use Page Object Model?
+
+<CardGroup cols={2}>
+  <Card title="Maintainability" icon="wrench">
+    Update locators in one place when UI changes
+  </Card>
+  <Card title="Reusability" icon="recycle">
+    Share page objects across multiple test files
+  </Card>
+  <Card title="Readability" icon="book">
+    Tests become more declarative and business-focused
+  </Card>
+  <Card title="Separation of Concerns" icon="layer-group">
+    Keep test logic separate from page implementation
+  </Card>
+</CardGroup>
+
+## Basic Implementation
+
+<Steps>
+  <Step title="Create a Page Object Class">
+    Define a class that represents a page and initializes all locators in the constructor.
+
+    ```python
+    from playwright.sync_api import Page
+
+    class LoginPage:
+        def __init__(self, page: Page):
+            self.page = page
+            self.page.goto("http://uitestingplayground.com/sampleapp")
+
+            # Initialize locators
+            self.username_input = self.page.get_by_placeholder("User Name")
+            self.password_input = self.page.get_by_placeholder("********")
+            self.login_btn = self.page.get_by_role("button", name="Log In")
+            self.label = self.page.locator("label#loginstatus")
+    ```
+
+    <Tip>
+    Initialize all locators in the `__init__` method so they're ready to use throughout the class.
+    </Tip>
+  </Step>
+
+  <Step title="Add Action Methods">
+    Create methods that perform actions on the page.
+
+    ```python
+    class LoginPage:
+        def __init__(self, page: Page):
+            self.page = page
+            self.page.goto("http://uitestingplayground.com/sampleapp")
+            self.username_input = self.page.get_by_placeholder("User Name")
+            self.password_input = self.page.get_by_placeholder("********")
+            self.login_btn = self.page.get_by_role("button", name="Log In")
+            self.label = self.page.locator("label#loginstatus")
+
+        def login(self, username, password):
+            self.username_input.fill(username)
+            self.password_input.fill(password)
+            self.login_btn.click()
+    ```
+  </Step>
+
+  <Step title="Use Page Objects in Tests">
+    Import and instantiate page objects in your tests.
+
+    ```python
+    from models.login_page import LoginPage
+    from playwright.sync_api import Page, expect
+
+    def test_successful_login(page: Page):
+        username = "dan"
+        password = "pwd"
+
+        login_page = LoginPage(page)
+        login_page.login(username, password)
+
+        expect(login_page.label).to_have_text(f"Welcome, {username}!")
+
+    def test_failed_login(page: Page):
+        username = "dan"
+        password = "cnasdjc"
+
+        login_page = LoginPage(page)
+        login_page.login(username, password)
+
+        expect(login_page.label).to_have_text("Invalid username/password")
+    ```
+  </Step>
+</Steps>
+
+## Advanced Example
+
+Here's a more complex page object with multiple methods and returning locators:
+
+```python
+from playwright.sync_api import Page, Locator
+
+class PlaywrightPage:
+    def __init__(self, page: Page):
+        self.page = page
+        self.page.goto("https://playwright.dev/python")
+
+        self.docs_link = self.page.get_by_role("link", name="Docs")
+        self.search_input = self.page.get_by_placeholder("Search docs")
+
+    def visit_docs(self):
+        self.docs_link.click()
+
+    def search(self, query):
+        self.page.keyboard.press("Control+KeyK")
+        self.search_input.fill(query)
+
+    def search_results(self) -> Locator:
+        print("Search Results:")
+        for result in self.page.locator("span.DocSearch-Hit-title").all():
+            print(result.inner_text())
+
+        return self.page.locator("div.DocSearch-Dropdown")
+```
+
+### Using the Advanced Page Object
+
+```python
+from models.playwright_page import PlaywrightPage
+from playwright.sync_api import Page, expect
+
+def test_docs_link(page: Page):
+    homepage = PlaywrightPage(page)
+    homepage.visit_docs()
+
+    expect(homepage.page).to_have_url(
+        "https://playwright.dev/python/docs/intro"
+    )
+
+def test_docs_search(page: Page):
+    query = "assertions"
+
+    homepage = PlaywrightPage(page)
+    homepage.search(query)
+
+    expect(homepage.search_results()).to_contain_text(
+        "List of assertions"
+    )
+```
+
+## Project Structure
+
+Organize your project with a dedicated directory for page objects:
+
+```
+project/
+├── models/
+│   ├── __init__.py
+│   ├── login_page.py
+│   ├── playwright_page.py
+│   └── home_page.py
+├── tests/
+│   ├── test_login.py
+│   ├── test_search.py
+│   └── test_navigation.py
+└── pytest.ini
+```
+
+## Best Practices
+
+<Warning>
+**Avoid These Common Mistakes:**
+- Don't put assertions inside page objects
+- Don't make page objects depend on other page objects
+- Don't return complex objects from page methods
+</Warning>
+
+### DO: Keep Page Objects Simple
+
+```python
+class LoginPage:
+    def login(self, username, password):
+        self.username_input.fill(username)
+        self.password_input.fill(password)
+        self.login_btn.click()
+        # Good: Just performs actions
+```
+
+### DON'T: Add Assertions to Page Objects
+
+```python
+class LoginPage:
+    def login(self, username, password):
+        self.username_input.fill(username)
+        self.password_input.fill(password)
+        self.login_btn.click()
+        expect(self.label).to_be_visible()  # Bad: Assertions belong in tests
+```
+
+### DO: Return Locators for Assertions
+
+```python
+class LoginPage:
+    def get_status_label(self) -> Locator:
+        return self.page.locator("label#loginstatus")
+
+# In test:
+expect(login_page.get_status_label()).to_have_text("Welcome!")
+```
+
+## Type Hints
+
+Always use type hints for better IDE support and code clarity:
+
+```python
+from playwright.sync_api import Page, Locator
+from typing import List
+
+class SearchPage:
+    def __init__(self, page: Page) -> None:
+        self.page = page
+
+    def search(self, query: str) -> None:
+        self.search_input.fill(query)
+
+    def get_results(self) -> List[str]:
+        return [el.inner_text() for el in self.results.all()]
+```
+
+## When to Use POM
+
+<Tip>
+**Use POM when:**
+- You have multiple tests interacting with the same pages
+- Your application has complex UI structures
+- You want to improve test maintainability
+- You're working in a team environment
+</Tip>
+
+<Note>
+**Skip POM for:**
+- One-off tests or quick prototypes
+- Very simple applications with few pages
+- API-only testing
+</Note>
